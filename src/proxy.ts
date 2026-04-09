@@ -28,6 +28,11 @@ export default auth((req: NextAuthRequest) => {
 
   const session = req.auth;
 
+  // API routes は各ルートハンドラで認証チェックするためリダイレクトしない
+  if (pathname.startsWith("/api/")) {
+    return NextResponse.next();
+  }
+
   // 未認証 → ログインページへ
   if (!session?.user?.dbId) {
     const loginUrl = new URL("/login", req.url);
