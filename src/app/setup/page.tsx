@@ -17,7 +17,7 @@ function getEducationMentorOptions(team: TeamGroup) {
 
 export default function SetupPage() {
   const router = useRouter();
-  const { data: session, status } = useSession();
+  const { data: session, status, update } = useSession();
 
   const [name, setName]   = useState("");
   const [nickname, setNickname] = useState("");
@@ -93,10 +93,9 @@ export default function SetupPage() {
         const d = await res.json();
         throw new Error(d.error ?? "保存に失敗しました");
       }
-      // セッションを更新してから dashboard へ
+      // セッションを強制更新してから dashboard へ
+      await update();
       router.replace("/dashboard");
-      // next-auth のセッションを再取得させるために少し待つ
-      setTimeout(() => router.refresh(), 300);
     } catch (e) {
       setError(e instanceof Error ? e.message : "エラーが発生しました");
     } finally {
