@@ -26,11 +26,12 @@ function colLetterToIndex(col: string): number {
 
 // ─── 名前正規化 ───────────────────────────────────────────────────
 
-/** 名前を比較用に正規化 (全角→半角, 空白除去, 小文字化) */
+/** 名前を比較用に正規化 (全角→半角, 空白・改行除去, 小文字化) */
 function normalizeName(name: string): string {
   return name
-    .normalize("NFKC")   // 全角英数・カタカナを半角に
-    .replace(/[\s　]/g, "")
+    .normalize("NFKC")          // 全角英数・カタカナを半角に
+    .replace(/[\r\n]/g, "")     // 改行を除去
+    .replace(/[\s　]/g, "")     // 全角・半角スペースを除去
     .toLowerCase();
 }
 

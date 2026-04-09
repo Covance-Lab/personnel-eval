@@ -1,8 +1,11 @@
 /**
  * GET  /api/performance  — 実績データ取得
- *   ?userId=UUID         — 特定ユーザーの全期間
- *   ?team=辻利&month=4&year=2026  — チーム今月分
- * POST /api/performance  — 実績データ一括登録（同期後の保存用）
+ *
+ * 権限:
+ *   Admin  — 全件取得可
+ *   Sales  — 自チームのアポインターの実績のみ
+ *   AM     — 自分が教育係のアポインターの実績のみ
+ *   Appointer — 自分自身のみ
  */
 
 import { NextRequest, NextResponse } from "next/server";
@@ -21,6 +24,10 @@ export async function GET(req: NextRequest) {
   const year   = searchParams.get("year") ? parseInt(searchParams.get("year")!) : null;
   const month  = searchParams.get("month") ? parseInt(searchParams.get("month")!) : null;
 
+  const userRole = session.user.role;
+  const userTeam = session.user.team;
+  const dbId     = session.user.dbId;
+
   let query = supabaseAdmin
     .from("performance_records")
     .select("*")
@@ -28,27 +35,74 @@ export async function GET(req: NextRequest) {
     .order("month", { ascending: false });
 
   if (userId) {
-    // 本人 or AM/Admin のみ
-    const isSelf = session.user.dbId === userId;
-    const isPriv = ["Admin", "AM", "Bridge", "Closer"].includes(session.user.role);
+    // 特定ユーザーの実績: 本人 or 権限者のみ
+    const isSelf = dbId === userId;
+    const isPriv = ["Admin", "AM", "Sales"].includes(userRole);
     if (!isSelf && !isPriv) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
+    // AM は自分が管轄するアポインターのみ
+    if (userRole === "AM") {
+      const { data: target } = await supabaseAdmin
+        .from("users")
+        .select("education_mentor_user_id")
+        .eq("id", userId)
+        .single();
+      if (target?.education_mentor_user_id !== dbId) {
+        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+      }
+    }
+    // 営業マンは自チームのみ
+    if (userRole === "Sales") {
+      const { data: target } = await supabaseAdmin
+        .from("users")
+        .select("team")
+        .eq("id", userId)
+        .single();
+      if (target?.team !== userTeam) {
+        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+      }
+    }
     query = query.eq("user_id", userId);
   } else if (team) {
-    if (!["Admin", "AM", "Bridge", "Closer"].includes(session.user.role)) {
+    if (!["Admin", "Sales"].includes(userRole)) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
-    // AM は自チームのみ
-    if (session.user.role === "AM" && session.user.team !== team) {
+    if (userRole === "Sales" && userTeam !== team) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
     query = query.eq("team", team);
     if (year)  query = query.eq("year", year);
     if (month) query = query.eq("month", month);
   } else {
-    // パラメータなしの場合は本人のデータのみ返す
-    query = query.eq("user_id", session.user.dbId);
+    // パラメータなし
+    if (userRole === "Admin") {
+      // Admin: 全件
+    } else if (userRole === "Sales") {
+      // 営業マン: 自チームのアポインターの実績
+      if (!userTeam) return NextResponse.json({ records: [] });
+      const { data: teamUsers } = await supabaseAdmin
+        .from("users")
+        .select("id")
+        .eq("team", userTeam)
+        .eq("role", "Appointer");
+      const ids = (teamUsers ?? []).map((u: { id: string }) => u.id);
+      if (ids.length === 0) return NextResponse.json({ records: [] });
+      query = query.in("user_id", ids);
+    } else if (userRole === "AM") {
+      // AM: 自分が管轄するアポインターの実績
+      const { data: myAppointers } = await supabaseAdmin
+        .from("users")
+        .select("id")
+        .eq("education_mentor_user_id", dbId)
+        .eq("role", "Appointer");
+      const ids = (myAppointers ?? []).map((u: { id: string }) => u.id);
+      if (ids.length === 0) return NextResponse.json({ records: [] });
+      query = query.in("user_id", ids);
+    } else {
+      // その他: 自分のみ
+      query = query.eq("user_id", dbId);
+    }
   }
 
   const { data, error } = await query;
@@ -66,7 +120,6 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  // 同期はAdminのみ実行可能
   if (!["Admin", "AM"].includes(session.user.role)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
@@ -76,7 +129,6 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "records は配列で指定してください" }, { status: 400 });
   }
 
-  // 実績レコードを Supabase に upsert（同じ user_id + year + month は上書き）
   const rows = records.map((r: {
     userId: string;
     sheetName?: string;
@@ -113,9 +165,6 @@ export async function POST(req: NextRequest) {
   return NextResponse.json({ saved: data?.length ?? 0 });
 }
 
-/**
- * PATCH /api/performance  — 期待月収の更新（本人のみ）
- */
 export async function PATCH(req: NextRequest) {
   const session = await auth();
   if (!session?.user?.dbId) {

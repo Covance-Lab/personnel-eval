@@ -40,3 +40,4 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 personnal-eval-c80e1c62439e.json
+personnal-eval-*.json

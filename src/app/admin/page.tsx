@@ -12,6 +12,8 @@ import {
   ChevronDown, ChevronUp, Trash2, ArrowLeft, Server, FlaskConical,
 } from "lucide-react";
 import type { TeamGroup, Role } from "@/types/user";
+import type { PerformanceRecord } from "@/types/performance";
+import { analyzePerformanceAlerts } from "@/types/performance";
 
 const TEAMS: TeamGroup[] = ["辻利", "LUMIA"];
 
@@ -251,6 +253,195 @@ function UserManagement() {
   );
 }
 
+// ─── 管理者向け: アポインター一覧（実績+プロフィール+ステータス） ─────────
+
+interface AppointerUserRow {
+  id: string;
+  nickname?: string;
+  name?: string;
+  role: Role;
+  team?: string;
+  line_name?: string;
+  line_picture_url?: string;
+  setup_completed?: boolean;
+  age?: number | null;
+  gender?: string | null;
+  hobbies?: string | null;
+  self_introduction?: string | null;
+  icon_image_url?: string | null;
+}
+
+function toClientRecords(rows: Record<string, unknown>[]): PerformanceRecord[] {
+  return (rows ?? []).map((r) => ({
+    userId: r.user_id as string,
+    sheetName: (r.sheet_name as string) ?? "",
+    year: r.year as number,
+    month: r.month as number,
+    dmCount: r.dm_count as number,
+    appoCount: r.appo_count as number,
+    appointmentRate: Number(r.appointment_rate),
+    income: r.income as number,
+    team: r.team as TeamGroup,
+    syncedAt: r.synced_at as string,
+    expectedIncome: r.expected_income as number | undefined,
+  }));
+}
+
+function AppointerOverview() {
+  const [users, setUsers] = useState<AppointerUserRow[]>([]);
+  const [records, setRecords] = useState<PerformanceRecord[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let active = true;
+    (async () => {
+      try {
+        const [usersRes, perfRes] = await Promise.all([
+          fetch(
+            "/api/user/list?role=Appointer&fields=id,nickname,name,role,team,line_name,line_picture_url,setup_completed,age,gender,hobbies,self_introduction,icon_image_url"
+          ),
+          fetch("/api/performance"),
+        ]);
+
+        const usersJson = await usersRes.json();
+        const perfJson = await perfRes.json();
+        if (!active) return;
+        setUsers((usersJson.users ?? []) as AppointerUserRow[]);
+        setRecords(toClientRecords(perfJson.records ?? []));
+      } finally {
+        if (active) setLoading(false);
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const byUser = new Map<string, PerformanceRecord[]>();
+  records.forEach((r) => {
+    const arr = byUser.get(r.userId) ?? [];
+    arr.push(r);
+    byUser.set(r.userId, arr);
+  });
+  byUser.forEach((arr) =>
+    arr.sort((a, b) => (a.year !== b.year ? b.year - a.year : b.month - a.month))
+  );
+
+  if (loading) {
+    return (
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm font-semibold text-gray-700">
+            アポインター一覧（実績・プロフィール）
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="text-sm text-gray-500">読み込み中...</p>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  return (
+    <Card>
+      <CardHeader className="pb-2">
+        <CardTitle className="text-sm font-semibold text-gray-700">
+          アポインター一覧（実績・プロフィール・ステータス）
+        </CardTitle>
+        <p className="text-xs text-gray-400">
+          スプレッドシート同期済みの実績と、設定済みプロフィールをまとめて確認できます
+        </p>
+      </CardHeader>
+      <CardContent>
+        {users.length === 0 ? (
+          <p className="text-sm text-gray-400 text-center py-4">アポインターがまだ登録されていません</p>
+        ) : (
+          <div className="space-y-3">
+            {users.map((u) => {
+              const userRecords = byUser.get(u.id) ?? [];
+              const latest = userRecords[0] ?? null;
+              const alerts = analyzePerformanceAlerts(userRecords);
+              const hasCritical = alerts.some((a) => a.severity === "critical");
+              const hasWarning = !hasCritical && alerts.some((a) => a.severity === "warning");
+
+              const status = !u.setup_completed
+                ? { label: "未設定", cls: "bg-gray-100 text-gray-700" }
+                : !latest
+                ? { label: "同期待ち", cls: "bg-amber-100 text-amber-700" }
+                : hasCritical
+                ? { label: "要対応", cls: "bg-red-100 text-red-700" }
+                : hasWarning
+                ? { label: "注意", cls: "bg-yellow-100 text-yellow-700" }
+                : { label: "稼働中", cls: "bg-green-100 text-green-700" };
+
+              const displayName = u.nickname ?? u.name ?? u.line_name ?? u.id;
+              const avatar = u.icon_image_url ?? u.line_picture_url ?? null;
+
+              return (
+                <div key={u.id} className="rounded-lg border p-3 bg-white">
+                  <div className="flex items-start gap-3">
+                    <div className="shrink-0">
+                      {avatar ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={avatar}
+                          alt={displayName}
+                          className="w-11 h-11 rounded-full object-cover border"
+                        />
+                      ) : (
+                        <div className="w-11 h-11 rounded-full bg-gray-100 border flex items-center justify-center text-xs text-gray-500">
+                          {displayName.slice(0, 1)}
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <p className="font-medium text-sm">{displayName}</p>
+                        <span className="text-xs px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700">
+                          {u.team ?? "チーム未設定"}
+                        </span>
+                        <span className={`text-xs px-2 py-0.5 rounded-full font-semibold ${status.cls}`}>
+                          {status.label}
+                        </span>
+                      </div>
+
+                      <div className="mt-2 grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">
+                        <div className="bg-gray-50 rounded px-2 py-1">
+                          <p className="text-gray-500">最新DM</p>
+                          <p className="font-semibold">{latest ? latest.dmCount : "—"}</p>
+                        </div>
+                        <div className="bg-gray-50 rounded px-2 py-1">
+                          <p className="text-gray-500">最新アポ</p>
+                          <p className="font-semibold">{latest ? latest.appoCount : "—"}</p>
+                        </div>
+                        <div className="bg-gray-50 rounded px-2 py-1">
+                          <p className="text-gray-500">獲得率</p>
+                          <p className="font-semibold">{latest ? `${latest.appointmentRate}%` : "—"}</p>
+                        </div>
+                        <div className="bg-gray-50 rounded px-2 py-1">
+                          <p className="text-gray-500">見込み月収</p>
+                          <p className="font-semibold">{latest ? `${latest.income.toLocaleString()}円` : "—"}</p>
+                        </div>
+                      </div>
+
+                      <div className="mt-2 text-xs text-gray-600 space-y-0.5">
+                        <p>年齢: {u.age ?? "未設定"} / 性別: {u.gender ?? "未設定"}</p>
+                        <p>趣味: {u.hobbies?.trim() ? u.hobbies : "未設定"}</p>
+                        <p className="truncate">自己紹介: {u.self_introduction?.trim() ? u.self_introduction : "未設定"}</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
 // ─── メインページ ─────────────────────────────────────────────────
 
 export default function AdminPage() {
@@ -312,6 +503,9 @@ export default function AdminPage() {
 
         {/* ユーザー管理 */}
         <UserManagement />
+
+        {/* アポインター可視化一覧 */}
+        <AppointerOverview />
 
         {/* 同期ログ */}
         <Card>
