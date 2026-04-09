@@ -40,8 +40,12 @@ export default auth((req: NextAuthRequest) => {
     return NextResponse.redirect(loginUrl);
   }
 
-  // セットアップ未完了 → /setup へ（/setup 以外）
-  if (!session.user.setupCompleted && !pathname.startsWith("/setup")) {
+  // セットアップ未完了 → /setup へ（/setup・/profile/setup 以外）
+  if (
+    !session.user.setupCompleted &&
+    !pathname.startsWith("/setup") &&
+    !pathname.startsWith("/profile/setup")
+  ) {
     return NextResponse.redirect(new URL("/setup", req.url));
   }
 
