@@ -1,13 +1,13 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import type { TeamGroup } from "@/types/user";
+import type { Role, TeamGroup } from "@/types/user";
 import { TEAMS, EDUCATION_MENTORS_BY_TEAM } from "@/data/mockUsers";
 
 // 教育係をAPIから取得する想定（現在はmockUsersから）
@@ -19,14 +19,18 @@ export default function SetupPage() {
   const router = useRouter();
   const { data: session, status, update } = useSession();
 
-  const [name, setName]   = useState("");
+  const [name, setName] = useState("");
   const [nickname, setNickname] = useState("");
-  const [team, setTeam]   = useState<TeamGroup>(TEAMS[0]);
+  const [role, setRole] = useState<Role>("Appointer");
+  const [team, setTeam] = useState<TeamGroup>(TEAMS[0]);
   const [educationMentorUserId, setEducationMentorUserId] = useState("");
   const [saving, setSaving] = useState(false);
-  const [error, setError]  = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const redirectingToProfile = useRef(false);
 
   const educationMentors = useMemo(() => getEducationMentorOptions(team), [team]);
+  const needsTeam = role === "Appointer" || role === "AM" || role === "Sales";
+  const needsMentor = role === "Appointer";
 
   useEffect(() => {
     if (status === "unauthenticated") {
@@ -34,7 +38,9 @@ export default function SetupPage() {
       return;
     }
     if (status === "authenticated" && session.user.setupCompleted) {
-      router.replace("/dashboard");
+      if (!redirectingToProfile.current) {
+        router.replace("/dashboard");
+      }
       return;
     }
     // LINEの名前を初期値にセット
@@ -45,6 +51,9 @@ export default function SetupPage() {
     // チームが既に設定されていれば反映
     if (status === "authenticated" && session.user.team) {
       setTeam(session.user.team);
+    }
+    if (status === "authenticated" && session.user.role) {
+      setRole(session.user.role);
     }
     // 教育係の初期値
     const firstMentor = getEducationMentorOptions(team)[0]?.userId ?? "";
@@ -70,8 +79,9 @@ export default function SetupPage() {
   const canSubmit =
     name.trim().length > 0 &&
     nickname.trim().length > 0 &&
-    Boolean(team) &&
-    Boolean(educationMentorUserId);
+    Boolean(role) &&
+    (!needsTeam || Boolean(team)) &&
+    (!needsMentor || Boolean(educationMentorUserId));
 
   async function handleSubmit() {
     if (!canSubmit) return;
@@ -84,8 +94,9 @@ export default function SetupPage() {
         body: JSON.stringify({
           name: name.trim(),
           nickname: nickname.trim(),
-          team,
-          education_mentor_user_id: educationMentorUserId,
+          role,
+          team: needsTeam ? team : null,
+          education_mentor_user_id: needsMentor ? educationMentorUserId : null,
           setup_completed: true,
         }),
       });
@@ -93,9 +104,10 @@ export default function SetupPage() {
         const d = await res.json();
         throw new Error(d.error ?? "保存に失敗しました");
       }
-      // セッションを強制更新してから dashboard へ
+      // セッションを強制更新してからプロフィール設定へ
+      redirectingToProfile.current = true;
       await update();
-      router.replace("/dashboard");
+      router.replace("/profile/setup");
     } catch (e) {
       setError(e instanceof Error ? e.message : "エラーが発生しました");
     } finally {
@@ -115,7 +127,7 @@ export default function SetupPage() {
 
         <div className="mt-6 space-y-4">
           <div>
-            <p className="text-sm font-medium text-gray-700 mb-1">本名</p>
+            <p className="text-sm font-medium text-gray-700 mb-1">名前</p>
             <Input
               value={name}
               onChange={(e) => setName(e.target.value)}
@@ -134,42 +146,62 @@ export default function SetupPage() {
               Googleスプレッドシートの名前欄と一致させることで実績データが自動連携されます。
             </p>
           </div>
-
           <div>
-            <p className="text-sm font-medium text-gray-700 mb-1">チーム</p>
+            <p className="text-sm font-medium text-gray-700 mb-1">役職</p>
             <Select
-              value={team}
-              onValueChange={(v) => setTeam(v as TeamGroup)}
+              value={role}
+              onValueChange={(v) => setRole((v ?? "Appointer") as Role)}
             >
               <SelectTrigger>
                 <SelectValue placeholder="選択" />
               </SelectTrigger>
               <SelectContent>
-                {TEAMS.map((t) => (
-                  <SelectItem key={t} value={t}>{t}</SelectItem>
-                ))}
+                <SelectItem value="Appointer">アポインター</SelectItem>
+                <SelectItem value="AM">アポインターマネージャー</SelectItem>
+                <SelectItem value="Sales">営業マン</SelectItem>
+                <SelectItem value="Admin">管理者</SelectItem>
               </SelectContent>
             </Select>
           </div>
 
-          <div>
-            <p className="text-sm font-medium text-gray-700 mb-1">教育係</p>
-            <Select
-              value={educationMentorUserId}
-              onValueChange={(v) => setEducationMentorUserId(v ?? "")}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="選択" />
-              </SelectTrigger>
-              <SelectContent>
-                {educationMentors.map((m) => (
-                  <SelectItem key={m.userId} value={m.userId}>
-                    {m.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
+          {needsTeam && (
+            <div>
+              <p className="text-sm font-medium text-gray-700 mb-1">チーム名</p>
+              <Select value={team} onValueChange={(v) => setTeam((v ?? TEAMS[0]) as TeamGroup)}>
+                <SelectTrigger>
+                  <SelectValue placeholder="選択" />
+                </SelectTrigger>
+                <SelectContent>
+                  {TEAMS.map((t) => (
+                    <SelectItem key={t} value={t}>
+                      {t}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+
+          {needsMentor && (
+            <div>
+              <p className="text-sm font-medium text-gray-700 mb-1">教育係</p>
+              <Select
+                value={educationMentorUserId}
+                onValueChange={(v) => setEducationMentorUserId(v ?? "")}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="選択" />
+                </SelectTrigger>
+                <SelectContent>
+                  {educationMentors.map((m) => (
+                    <SelectItem key={m.userId} value={m.userId}>
+                      {m.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
 
           {error && (
             <p className="text-sm text-red-600 bg-red-50 rounded px-3 py-2">{error}</p>
