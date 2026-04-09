@@ -1,4 +1,10 @@
-export type Role = "Admin" | "AM" | "Bridge" | "Closer" | "Appointer";
+export type Role =
+  | "Admin"
+  | "AM"
+  | "Sales"
+  | "Bridge"
+  | "Closer"
+  | "Appointer";
 export type TeamGroup = "辻利" | "LUMIA";
 
 export interface UserAccount {

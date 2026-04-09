@@ -52,14 +52,15 @@ export async function PUT(req: NextRequest) {
   }
 
   const row = {
-    team:               team as TeamGroup,
+    team:               team,
     spreadsheet_url:    spreadsheetUrl,
     spreadsheet_id:     spreadsheetId,
     sheet_name:         sheetName ?? "",
-    name_column:        columns?.nameColumn         ?? "A",
-    dm_count_column:    columns?.dmCountColumn       ?? "B",
-    appo_count_column:  columns?.appoCountColumn     ?? "C",
-    income_column:      columns?.incomeColumn        ?? "D",
+    team_column:        columns?.teamColumn          ?? null,
+    name_column:        columns?.nameColumn          ?? "B",
+    dm_count_column:    columns?.dmCountColumn       ?? "C",
+    appo_count_column:  columns?.appoCountColumn     ?? "E",
+    income_column:      columns?.incomeColumn        ?? "F",
     data_start_row:     columns?.dataStartRow        ?? 2,
     updated_at:         new Date().toISOString(),
   };
@@ -85,10 +86,11 @@ function dbToConfig(row: Record<string, unknown>) {
     spreadsheetId:    row.spreadsheet_id,
     sheetName:        row.sheet_name ?? "",
     columns: {
-      nameColumn:        row.name_column ?? "A",
-      dmCountColumn:     row.dm_count_column ?? "B",
-      appoCountColumn:   row.appo_count_column ?? "C",
-      incomeColumn:      row.income_column ?? "D",
+      teamColumn:        row.team_column ?? undefined,
+      nameColumn:        row.name_column ?? "B",
+      dmCountColumn:     row.dm_count_column ?? "C",
+      appoCountColumn:   row.appo_count_column ?? "E",
+      incomeColumn:      row.income_column ?? "F",
       dataStartRow:      row.data_start_row ?? 2,
     },
     updatedAt: row.updated_at,

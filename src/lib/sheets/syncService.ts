@@ -38,11 +38,11 @@ function normalizeName(name: string): string {
 
 export interface SyncServiceParams {
   config: SheetConfig;
-  /** システム内ユーザーの {userId: string, nickname: string, name: string}[] */
-  userMappings: Array<{ userId: string; nickname: string; name: string }>;
+  /** システム内ユーザーの {userId, nickname, name, team}[] */
+  userMappings: Array<{ userId: string; nickname: string; name: string; team?: string }>;
   year: number;
   month: number;
-  team: TeamGroup;
+  team: TeamGroup | "全チーム";
 }
 
 export async function runSyncService(
@@ -68,7 +68,7 @@ export async function runSyncService(
     const message = err instanceof Error ? err.message : String(err);
     const errorLog: SyncLog = {
       id: logId,
-      team,
+      team: team === "全チーム" ? "辻利" : team,
       syncedAt,
       status: "error",
       processedCount: 0,
@@ -85,17 +85,28 @@ export async function runSyncService(
 
   // ─── 2. 列インデックスを解決 ────────────────────────────────
   const cols = config.columns;
+  const teamIdx      = cols.teamColumn ? colLetterToIndex(cols.teamColumn) : -1;
   const nameIdx      = colLetterToIndex(cols.nameColumn);
   const dmIdx        = colLetterToIndex(cols.dmCountColumn);
   const appoIdx      = colLetterToIndex(cols.appoCountColumn);
   const incomeIdx    = colLetterToIndex(cols.incomeColumn);
   const dataStartRow = cols.dataStartRow - 1; // 0-indexed
 
-  // ─── 3. ユーザーマッピング辞書 (正規化名 → userId) ─────────
+  // ─── 3. ユーザーマッピング辞書 (正規化名+チーム → userId) ───
+  // チーム列がある場合: チーム+名前で紐付け
+  // ない場合: 名前のみで紐付け
   const nameToUserId = new Map<string, string>();
-  userMappings.forEach(({ userId, nickname, name }) => {
-    nameToUserId.set(normalizeName(nickname), userId);
-    nameToUserId.set(normalizeName(name), userId);
+  const nameTeamToUserId = new Map<string, string>();
+
+  userMappings.forEach(({ userId, nickname, name, team: userTeam }) => {
+    const normalizedNick = normalizeName(nickname);
+    const normalizedName = normalizeName(name);
+    nameToUserId.set(normalizedNick, userId);
+    nameToUserId.set(normalizedName, userId);
+    if (userTeam) {
+      nameTeamToUserId.set(`${normalizeName(userTeam)}:${normalizedNick}`, userId);
+      nameTeamToUserId.set(`${normalizeName(userTeam)}:${normalizedName}`, userId);
+    }
   });
 
   // ─── 4. 行を処理 ────────────────────────────────────────────
@@ -107,19 +118,39 @@ export async function runSyncService(
     const rawName = row[nameIdx]?.toString().trim() ?? "";
     if (!rawName) continue; // 空行スキップ
 
+    // チーム列がある場合はシートのチームを使用
+    let rowTeam: TeamGroup | undefined;
+    if (teamIdx >= 0) {
+      const rawTeam = row[teamIdx]?.toString().trim() ?? "";
+      if (rawTeam === "辻利" || rawTeam === "LUMIA") {
+        rowTeam = rawTeam as TeamGroup;
+      }
+    }
+
+    // チーム指定がある場合はそのチームのみ処理
+    if (team !== "全チーム" && rowTeam && rowTeam !== team) continue;
+
     const normalizedName = normalizeName(rawName);
-    const userId = nameToUserId.get(normalizedName);
+
+    // チーム+名前で検索、なければ名前のみで検索
+    let userId: string | undefined;
+    if (rowTeam) {
+      userId = nameTeamToUserId.get(`${normalizeName(rowTeam)}:${normalizedName}`);
+    }
+    if (!userId) {
+      userId = nameToUserId.get(normalizedName);
+    }
 
     if (!userId) {
-      // 名前が一致するユーザーなし
       skippedCount++;
       continue;
     }
 
-    const dmCount    = parseNum(row[dmIdx]);
-    const appoCount  = parseNum(row[appoIdx]);
-    const income     = parseNum(row[incomeIdx]);
-    const rate       = calcAppointmentRate(appoCount, dmCount);
+    const dmCount   = parseNum(row[dmIdx]);
+    const appoCount = parseNum(row[appoIdx]);
+    const income    = incomeIdx >= 0 ? parseNum(row[incomeIdx]) : 0;
+    const rate      = calcAppointmentRate(appoCount, dmCount);
+    const recordTeam = rowTeam ?? (team !== "全チーム" ? team : "辻利");
 
     records.push({
       userId,
@@ -130,15 +161,16 @@ export async function runSyncService(
       appoCount,
       appointmentRate: rate,
       income,
-      team,
+      team: recordTeam,
       syncedAt,
     });
   }
 
   // ─── 5. 同期ログ生成 ────────────────────────────────────────
+  const logTeam: TeamGroup = team === "全チーム" ? "辻利" : team;
   const log: SyncLog = {
     id: logId,
-    team,
+    team: logTeam,
     syncedAt,
     status: skippedCount > 0 && records.length === 0 ? "error" : skippedCount > 0 ? "partial" : "success",
     processedCount: records.length,

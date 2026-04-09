@@ -2,12 +2,12 @@
  * POST /api/sheets/sync
  *
  * Google Sheets からデータを取得し、Supabase に直接保存する（認証必須）。
- * シート設定は DB から取得するため、クライアントから config を渡す必要はない。
+ * "全チーム" を指定すると1枚のシートから全チームを一括同期する。
  *
  * Body:
- *   team    TeamGroup   対象チーム ("辻利" | "LUMIA")
- *   year?   number      対象年 (省略時: 今月)
- *   month?  number      対象月 (省略時: 今月)
+ *   team    "全チーム" | TeamGroup   対象チーム
+ *   year?   number                   対象年 (省略時: 今月)
+ *   month?  number                   対象月 (省略時: 今月)
  */
 
 import { NextRequest, NextResponse } from "next/server";
@@ -26,7 +26,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: false, error: "Forbidden" }, { status: 403 });
   }
 
-  let body: { team: TeamGroup; year?: number; month?: number };
+  let body: { team: TeamGroup | "全チーム"; year?: number; month?: number };
   try {
     body = await req.json();
   } catch {
@@ -43,6 +43,7 @@ export async function POST(req: NextRequest) {
   const targetMonth = month ?? now.getMonth() + 1;
 
   // ─── 1. DB からシート設定を取得 ──────────────────────────────
+  // "全チーム" 設定を優先して探し、なければ指定チームの設定を探す
   const { data: cfgRow, error: cfgErr } = await supabaseAdmin
     .from("sheet_configs")
     .select("*")
@@ -51,7 +52,7 @@ export async function POST(req: NextRequest) {
 
   if (cfgErr || !cfgRow) {
     return NextResponse.json(
-      { ok: false, error: `${team} のシート設定が見つかりません。Admin設定でURLを登録してください。` },
+      { ok: false, error: `シート設定が見つかりません。Admin設定でURLを登録してください。` },
       { status: 404 }
     );
   }
@@ -62,27 +63,35 @@ export async function POST(req: NextRequest) {
     spreadsheetId:  cfgRow.spreadsheet_id,
     sheetName:      cfgRow.sheet_name ?? "",
     columns: {
-      nameColumn:       cfgRow.name_column      ?? "A",
-      dmCountColumn:    cfgRow.dm_count_column   ?? "B",
-      appoCountColumn:  cfgRow.appo_count_column ?? "C",
-      incomeColumn:     cfgRow.income_column     ?? "D",
+      teamColumn:       cfgRow.team_column      ?? undefined,
+      nameColumn:       cfgRow.name_column      ?? "B",
+      dmCountColumn:    cfgRow.dm_count_column   ?? "C",
+      appoCountColumn:  cfgRow.appo_count_column ?? "E",
+      incomeColumn:     cfgRow.income_column     ?? "F",
       dataStartRow:     cfgRow.data_start_row    ?? 2,
     },
     updatedAt: cfgRow.updated_at,
   };
 
   // ─── 2. DB からアポインターのユーザーマッピングを取得 ─────────
-  const { data: appoUsers } = await supabaseAdmin
+  // 全チームの場合は全アポインターを取得
+  let appoQuery = supabaseAdmin
     .from("users")
-    .select("id, nickname, name")
-    .eq("team", team)
+    .select("id, nickname, name, team")
     .eq("role", "Appointer")
     .eq("setup_completed", true);
 
-  const userMappings = (appoUsers ?? []).map((u: { id: string; nickname?: string; name?: string }) => ({
+  if (team !== "全チーム") {
+    appoQuery = appoQuery.eq("team", team);
+  }
+
+  const { data: appoUsers } = await appoQuery;
+
+  const userMappings = (appoUsers ?? []).map((u: { id: string; nickname?: string; name?: string; team?: string }) => ({
     userId:   u.id,
     nickname: u.nickname ?? u.id,
     name:     u.name     ?? u.id,
+    team:     u.team,
   }));
 
   // ─── 3. Sheets 同期実行 ─────────────────────────────────────

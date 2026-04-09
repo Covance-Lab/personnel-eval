@@ -3,5 +3,5 @@
   "buildCommand": "npm run build",
   "devCommand": "npm run dev",
   "installCommand": "npm install",
-  "regions": ["nrt1"]
+  "regions": ["hnd1"]
 }

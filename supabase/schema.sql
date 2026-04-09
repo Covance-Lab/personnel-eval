@@ -13,11 +13,18 @@ CREATE TABLE IF NOT EXISTS users (
   line_id                 TEXT UNIQUE NOT NULL,            -- LINE providerAccountId
   line_name               TEXT,                            -- LINEの表示名
   line_picture_url        TEXT,                            -- LINEのプロフィール画像URL
-  role                    TEXT NOT NULL DEFAULT 'Appointer', -- 'Admin'|'AM'|'Bridge'|'Closer'|'Appointer'
+  role                    TEXT NOT NULL DEFAULT 'Appointer', -- 'Admin'|'AM'|'Sales'|'Bridge'|'Closer'|'Appointer'
   name                    TEXT,                            -- 本名
   nickname                TEXT,                            -- あだ名（スプシ紐付けキー）
   team                    TEXT,                            -- '辻利' | 'LUMIA'
   education_mentor_user_id TEXT,                           -- 教育係のusers.id
+  age                     INTEGER,
+  gender                  TEXT,
+  hobbies                 TEXT,
+  self_introduction       TEXT,
+  icon_image_url          TEXT,
+  featured_image_1_url    TEXT,
+  featured_image_2_url    TEXT,
   setup_completed         BOOLEAN NOT NULL DEFAULT FALSE,
   expected_income         INTEGER,                         -- 本人設定の期待月収（円）
   created_at              TIMESTAMPTZ NOT NULL DEFAULT NOW(),

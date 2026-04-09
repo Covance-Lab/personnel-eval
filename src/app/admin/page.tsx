@@ -18,11 +18,12 @@ const TEAMS: TeamGroup[] = ["辻利", "LUMIA"];
 // ─── シート設定フォーム ─────────────────────────────────────────
 
 interface SheetConfigRow {
-  team: TeamGroup;
+  team: TeamGroup | "全チーム";
   spreadsheetUrl: string;
   spreadsheetId: string;
   sheetName: string;
   columns: {
+    teamColumn?: string;
     nameColumn: string; dmCountColumn: string;
     appoCountColumn: string; incomeColumn: string;
     dataStartRow: number;
@@ -30,16 +31,17 @@ interface SheetConfigRow {
   updatedAt: string;
 }
 
-function TeamSheetForm({ team, onSynced }: { team: TeamGroup; onSynced: () => void }) {
+function TeamSheetForm({ team, onSynced }: { team: TeamGroup | "全チーム"; onSynced: () => void }) {
   const [cfg, setCfg]           = useState<SheetConfigRow | null>(null);
   const [url, setUrl]           = useState("");
   const [sheetName, setSheetName] = useState("");
   const [saveResult, setSaveResult] = useState<{ ok: boolean; msg: string } | null>(null);
   const [showColumns, setShowColumns] = useState(false);
-  const [nameCol, setNameCol]   = useState("A");
-  const [dmCol, setDmCol]       = useState("B");
-  const [appoCol, setAppoCol]   = useState("C");
-  const [incomeCol, setIncomeCol] = useState("D");
+  const [teamCol, setTeamCol]   = useState("A");
+  const [nameCol, setNameCol]   = useState("B");
+  const [dmCol, setDmCol]       = useState("C");
+  const [appoCol, setAppoCol]   = useState("E");
+  const [incomeCol, setIncomeCol] = useState("F");
   const [startRow, setStartRow] = useState("2");
   const [syncing, setSyncing]   = useState(false);
   const [syncResult, setSyncResult] = useState<{ ok: boolean; msg: string; mock?: boolean } | null>(null);
@@ -53,6 +55,7 @@ function TeamSheetForm({ team, onSynced }: { team: TeamGroup; onSynced: () => vo
         setCfg(found);
         setUrl(found.spreadsheetUrl);
         setSheetName(found.sheetName);
+        if (found.columns.teamColumn) setTeamCol(found.columns.teamColumn);
         setNameCol(found.columns.nameColumn);
         setDmCol(found.columns.dmCountColumn);
         setAppoCol(found.columns.appoCountColumn);
@@ -71,8 +74,8 @@ function TeamSheetForm({ team, onSynced }: { team: TeamGroup; onSynced: () => vo
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         team, spreadsheetUrl: url.trim(), sheetName: sheetName.trim(),
-        columns: { nameColumn: nameCol, dmCountColumn: dmCol, appoCountColumn: appoCol,
-          incomeColumn: incomeCol, dataStartRow: parseInt(startRow) || 2 },
+        columns: { teamColumn: teamCol || undefined, nameColumn: nameCol, dmCountColumn: dmCol,
+          appoCountColumn: appoCol, incomeColumn: incomeCol, dataStartRow: parseInt(startRow) || 2 },
       }),
     });
     const data = await res.json();
@@ -100,11 +103,11 @@ function TeamSheetForm({ team, onSynced }: { team: TeamGroup; onSynced: () => vo
   }
 
   return (
-    <Card className="border-l-4" style={{ borderLeftColor: team === "辻利" ? "#6366f1" : "#ec4899" }}>
+    <Card className="border-l-4" style={{ borderLeftColor: "#6366f1" }}>
       <CardHeader className="pb-3">
         <div className="flex items-center justify-between">
           <CardTitle className="text-base flex items-center gap-2">
-            <Link2 className="w-4 h-4" /> {team} スプレッドシート設定
+            <Link2 className="w-4 h-4" /> スプレッドシート設定（全チーム統合）
           </CardTitle>
           {cfg && <Badge variant="secondary" className="text-xs">連携済み</Badge>}
         </div>
@@ -135,9 +138,11 @@ function TeamSheetForm({ team, onSynced }: { team: TeamGroup; onSynced: () => vo
         </button>
         {showColumns && (
           <div className="p-3 bg-gray-50 rounded-lg space-y-3">
+            <p className="text-xs text-gray-500">現在のシート形式: A=チーム, B=名前, C=DM数, D=返信数, E=B設定数(アポ), F=契約数</p>
             <div className="grid grid-cols-2 gap-2 text-xs">
-              {[["名前列", nameCol, setNameCol], ["DM数列", dmCol, setDmCol],
-                ["アポ獲得数列", appoCol, setAppoCol], ["見込み月収列", incomeCol, setIncomeCol]
+              {[["チーム列", teamCol, setTeamCol], ["名前列", nameCol, setNameCol],
+                ["DM数列", dmCol, setDmCol], ["アポ獲得数列", appoCol, setAppoCol],
+                ["見込み月収列", incomeCol, setIncomeCol]
               ].map(([label, value, setter]) => (
                 <div key={label as string}>
                   <label className="text-gray-600 font-medium">{label as string}</label>
@@ -145,7 +150,7 @@ function TeamSheetForm({ team, onSynced }: { team: TeamGroup; onSynced: () => vo
                     className="h-7 text-xs mt-0.5 font-mono uppercase" maxLength={3} />
                 </div>
               ))}
-              <div className="col-span-2">
+              <div>
                 <label className="text-xs text-gray-600 font-medium">データ開始行</label>
                 <Input type="number" value={startRow} onChange={(e) => setStartRow(e.target.value)} className="h-7 text-xs mt-0.5 w-20" min={1} />
               </div>
@@ -302,11 +307,7 @@ export default function AdminPage() {
         {/* スプシ設定 */}
         <div>
           <h2 className="text-sm font-semibold text-gray-700 mb-3">スプレッドシート連携設定</h2>
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            {TEAMS.map((team) => (
-              <TeamSheetForm key={team} team={team} onSynced={() => setSyncKey((k) => k + 1)} />
-            ))}
-          </div>
+          <TeamSheetForm key="全チーム" team="全チーム" onSynced={() => setSyncKey((k) => k + 1)} />
         </div>
 
         {/* ユーザー管理 */}

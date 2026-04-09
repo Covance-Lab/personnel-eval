@@ -64,8 +64,8 @@ export default function DashboardPage() {
       setMyRecords(toClientRecords(records));
     }
 
-    // AM/Admin/Bridge/Closer: チームメンバーと今月実績
-    if (["Admin", "AM", "Bridge", "Closer"].includes(role)) {
+    // AM/Admin/Sales/Bridge/Closer: チームメンバーと今月実績
+    if (["Admin", "AM", "Sales", "Bridge", "Closer"].includes(role)) {
       const teamParam = team ? `&team=${encodeURIComponent(team)}` : "";
       const [membersRes, teamPerfRes] = await Promise.all([
         fetch(`/api/user/list?role=Appointer${teamParam}`),
@@ -126,7 +126,7 @@ export default function DashboardPage() {
   const isAppointer  = role === "Appointer";
   const isAM         = role === "AM";
   const isAdmin      = role === "Admin";
-  const isBridgeCloser = role === "Bridge" || role === "Closer";
+  const isBridgeCloser = role === "Bridge" || role === "Closer" || role === "Sales";
 
   return (
     <div className="min-h-screen bg-gray-50 p-4">

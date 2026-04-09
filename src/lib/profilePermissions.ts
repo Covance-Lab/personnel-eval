@@ -2,6 +2,7 @@ import type { Role } from "@/types/user";
 import { roleLabelMap, mockUsers } from "@/data/mockUsers";
 
 export function getRoleLabel(role: Role): string {
+  if (role === "Sales") return "営業マン";
   return roleLabelMap[role] ?? role;
 }
 

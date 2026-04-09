@@ -33,12 +33,26 @@ export async function PATCH(req: NextRequest) {
   }
 
   const body = await req.json();
+  const { data: currentUser } = await supabaseAdmin
+    .from("users")
+    .select("role, setup_completed")
+    .eq("id", session.user.dbId)
+    .single();
+
   const allowedFields = [
     "name",
     "nickname",
+    "role",
     "team",
     "education_mentor_user_id",
     "setup_completed",
+    "age",
+    "gender",
+    "hobbies",
+    "self_introduction",
+    "icon_image_url",
+    "featured_image_1_url",
+    "featured_image_2_url",
     "expected_income",
   ];
 
@@ -47,9 +61,13 @@ export async function PATCH(req: NextRequest) {
     if (field in body) updates[field] = body[field];
   }
 
-  // Admin 以外はロール変更不可
-  if (session.user.role === "Admin" && "role" in body) {
-    updates.role = body.role;
+  // role変更は Admin か、初期設定未完了ユーザーのみ許可
+  if ("role" in body) {
+    const canUpdateRole =
+      session.user.role === "Admin" || currentUser?.setup_completed === false;
+    if (!canUpdateRole) {
+      return NextResponse.json({ error: "Role update is not allowed" }, { status: 403 });
+    }
   }
 
   const { data, error } = await supabaseAdmin

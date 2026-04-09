@@ -1,4 +1,4 @@
-import type { Role, TeamGroup, UserAccount, UserSetup, UserProfileDetails } from "@/types/user";
+import type { Role, TeamGroup, UserAccount } from "@/types/user";
 
 export const TEAMS: TeamGroup[] = ["辻利", "LUMIA"];
 
@@ -60,6 +60,7 @@ export const mockUsers: UserAccount[] = [
 export const roleLabelMap: Record<Role, string> = {
   Admin: "Admin",
   AM: "AM",
+  Sales: "営業マン",
   Bridge: "ブリッジ",
   Closer: "クローザー",
   Appointer: "アポインター",

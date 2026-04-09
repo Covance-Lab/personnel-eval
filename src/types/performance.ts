@@ -7,6 +7,8 @@ import type { TeamGroup } from "@/types/user";
  * 文字列 "A"〜"Z" or "AA" 等のアルファベット表記で指定
  */
 export interface SheetColumnMapping {
+  /** チーム列 (省略時はチーム別シートとして扱う) */
+  teamColumn?: string;
   /** 名前 / あだ名列 */
   nameColumn: string;
   /** DM送信数列 */
@@ -21,8 +23,8 @@ export interface SheetColumnMapping {
 
 /** チームごとのスプレッドシート設定 */
 export interface SheetConfig {
-  /** チーム識別子 */
-  team: TeamGroup;
+  /** チーム識別子 ("全チーム" の場合は全チーム統合シート) */
+  team: TeamGroup | "全チーム";
   /** スプレッドシートのURL (GoogleのフルURL) */
   spreadsheetUrl: string;
   /** URLから抽出したSpreadsheet ID (自動抽出) */
@@ -35,12 +37,13 @@ export interface SheetConfig {
   updatedAt: string;
 }
 
-/** シート設定のデフォルト列マッピング */
+/** シート設定のデフォルト列マッピング（全チーム統合シート用） */
 export const DEFAULT_COLUMN_MAPPING: SheetColumnMapping = {
-  nameColumn: "A",
-  dmCountColumn: "B",
-  appoCountColumn: "C",
-  incomeColumn: "D",
+  teamColumn: "A",
+  nameColumn: "B",
+  dmCountColumn: "C",
+  appoCountColumn: "E",
+  incomeColumn: "F",
   dataStartRow: 2,
 };
 
