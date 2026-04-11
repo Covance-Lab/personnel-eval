@@ -19,13 +19,36 @@ export async function GET(req: NextRequest) {
   }
 
   const { searchParams } = new URL(req.url);
-  const teamParam  = searchParams.get("team");
-  const roleParam  = searchParams.get("role");
-  const fieldParam = searchParams.get("fields") ?? "id,nickname,name,team,role,setup_completed,line_picture_url";
+  const teamParam     = searchParams.get("team");
+  const roleParam     = searchParams.get("role");        // 単一ロール
+  const rolesParam    = searchParams.get("roles");       // カンマ区切り複数ロール
+  const mentorOfParam = searchParams.get("mentorOf");   // 担当アポインターIDでAMを逆引き
+  const fieldParam    = searchParams.get("fields") ?? "id,nickname,name,team,role,setup_completed,line_picture_url";
 
   const userRole = session.user.role;
   const userTeam = session.user.team;
   const userId   = session.user.dbId;
+
+  // アポインターが自分の担当AMを逆引き（自分の education_mentor_user_id を持つAMを取得）
+  if (mentorOfParam) {
+    // アポインター自身または Admin のみ許可
+    if (userRole !== "Admin" && userId !== mentorOfParam) {
+      return NextResponse.json({ users: [] });
+    }
+    // まずアポインター本人の education_mentor_user_id を取得
+    const { data: appo } = await supabaseAdmin
+      .from("users")
+      .select("education_mentor_user_id")
+      .eq("id", mentorOfParam)
+      .single();
+    if (!appo?.education_mentor_user_id) return NextResponse.json({ users: [] });
+    const { data, error } = await supabaseAdmin
+      .from("users")
+      .select(fieldParam)
+      .eq("id", appo.education_mentor_user_id);
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ users: data ?? [] });
+  }
 
   let query = supabaseAdmin
     .from("users")
@@ -36,14 +59,27 @@ export async function GET(req: NextRequest) {
     // Admin: 全チーム閲覧可。クエリパラメータでフィルタ可能
     if (teamParam) query = query.eq("team", teamParam);
   } else if (userRole === "Sales") {
-    // 営業マン: 自チームのアポインター・AMのみ
+    // 営業マン: 自チームのアポインター・AMのみ（+ rolesパラメータで自チームのSales/Closerも取得可）
     if (!userTeam) {
       return NextResponse.json({ users: [] });
     }
-    query = query.eq("team", userTeam).in("role", ["Appointer", "AM"]);
+    if (rolesParam) {
+      const roles = rolesParam.split(",").map((r) => r.trim());
+      query = query.eq("team", userTeam).in("role", roles);
+    } else {
+      query = query.eq("team", userTeam).in("role", ["Appointer", "AM"]);
+    }
   } else if (userRole === "AM") {
     // AM: 自分が教育係として紐付いているアポインターのみ
     query = query.eq("education_mentor_user_id", userId).eq("role", "Appointer");
+  } else if (userRole === "Appointer") {
+    // アポインター: 同チームのSales/Closerを閲覧可
+    if (rolesParam && userTeam) {
+      const roles = rolesParam.split(",").map((r) => r.trim());
+      query = query.eq("team", userTeam).in("role", roles);
+    } else {
+      query = query.eq("id", userId);
+    }
   } else {
     // その他: 自分のみ
     query = query.eq("id", userId);
@@ -51,6 +87,10 @@ export async function GET(req: NextRequest) {
 
   if (roleParam && userRole === "Admin") {
     query = query.eq("role", roleParam);
+  }
+  if (rolesParam && userRole === "Admin") {
+    const roles = rolesParam.split(",").map((r) => r.trim());
+    query = query.in("role", roles);
   }
 
   const { data, error } = await query.order("nickname");
