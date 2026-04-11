@@ -28,13 +28,11 @@ export async function GET(req: NextRequest) {
     .eq("year", year)
     .eq("month", month);
 
-  // テーブルが存在しない場合は未提出扱いで続行
-  if (submittedErr && submittedErr.code === "42P01") {
-    return NextResponse.json({ role: myRole, fullySubmitted: false, pages: [] });
-  }
-
+  // テーブルが存在しない場合は全て未提出として続行（pages生成はスキップしない）
   const submittedMap = new Map(
-    (submitted ?? []).map((r) => [`${r.target_id}:${r.survey_type}`, r.submitted_at])
+    submittedErr
+      ? [] // エラー時は空マップ（全て未提出扱い）
+      : (submitted ?? []).map((r) => [`${r.target_id}:${r.survey_type}`, r.submitted_at])
   );
 
   if (myRole === "Appointer") {

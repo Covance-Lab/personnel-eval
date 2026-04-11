@@ -367,64 +367,106 @@ function AggregateSheetForm() {
 
 // ─── ユーザー管理テーブル ─────────────────────────────────────────
 
-const ROLES: Role[] = ["Admin", "AM", "Bridge", "Closer", "Appointer"];
+const ROLES: Role[] = ["Admin", "AM", "Bridge", "Closer", "Appointer", "Sales"];
+
+interface ManagedUser {
+  id: string;
+  nickname?: string;
+  name?: string;
+  role: Role;
+  team?: string;
+  line_name?: string;
+  education_mentor_user_id?: string;
+}
 
 function UserManagement() {
-  const [users, setUsers] = useState<Array<{ id: string; nickname?: string; name?: string; role: Role; team?: string; line_name?: string }>>([]);
+  const [users, setUsers] = useState<ManagedUser[]>([]);
 
-  useEffect(() => {
-    fetch("/api/user/list?fields=id,nickname,name,role,team,line_name")
-      .then((r) => r.json())
-      .then((d) => setUsers(d.users ?? []));
+  const load = useCallback(async () => {
+    const r = await fetch("/api/user/list?fields=id,nickname,name,role,team,line_name,education_mentor_user_id");
+    const d = await r.json();
+    setUsers(d.users ?? []);
   }, []);
 
-  async function updateUser(userId: string, role: Role, team?: string) {
+  useEffect(() => { load(); }, [load]);
+
+  async function updateUser(userId: string, patch: Partial<{ role: Role; team: string; educationMentorUserId: string | null }>) {
     await fetch("/api/user/list", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ userId, role, team }),
+      body: JSON.stringify({ userId, ...patch }),
     });
-    // 再読み込み
-    const r = await fetch("/api/user/list?fields=id,nickname,name,role,team,line_name");
-    const d = await r.json();
-    setUsers(d.users ?? []);
+    load();
   }
+
+  const amList = users.filter((u) => u.role === "AM");
 
   return (
     <Card>
       <CardHeader className="pb-2">
         <CardTitle className="text-sm font-semibold text-gray-700">ユーザー管理</CardTitle>
-        <p className="text-xs text-gray-400">LINEログイン済みのユーザー一覧。ロールとチームを変更できます。</p>
+        <p className="text-xs text-gray-400">ロール・チーム・教育係（AM）を変更できます。アポインターには必ず教育係のAMを設定してください。</p>
       </CardHeader>
       <CardContent>
         {users.length === 0 ? (
-          <p className="text-sm text-gray-400 text-center py-4">ユーザーなし（LINEログイン後に表示されます）</p>
+          <p className="text-sm text-gray-400 text-center py-4">ユーザーなし（ログイン後に表示されます）</p>
         ) : (
           <div className="space-y-2">
-            {users.map((u) => (
-              <div key={u.id} className="flex items-center gap-3 p-2 rounded-lg border text-sm flex-wrap">
-                <div className="min-w-0 flex-1">
-                  <p className="font-medium truncate">{u.nickname ?? u.name ?? u.line_name ?? u.id}</p>
-                  <p className="text-xs text-gray-400 truncate">{u.id}</p>
+            {users.map((u) => {
+              const displayName = u.nickname ?? u.name ?? u.line_name ?? u.id;
+              const isAppointer = u.role === "Appointer";
+              return (
+                <div key={u.id} className="p-2 rounded-lg border text-sm space-y-1.5">
+                  <div className="flex items-center gap-3 flex-wrap">
+                    <div className="min-w-0 flex-1">
+                      <p className="font-medium truncate">{displayName}</p>
+                    </div>
+                    {/* ロール */}
+                    <select
+                      className="h-8 rounded border bg-white px-2 text-xs"
+                      value={u.role}
+                      onChange={(e) => updateUser(u.id, { role: e.target.value as Role, team: u.team })}
+                    >
+                      {ROLES.map((r) => <option key={r} value={r}>{r}</option>)}
+                    </select>
+                    {/* チーム */}
+                    <select
+                      className="h-8 rounded border bg-white px-2 text-xs"
+                      value={u.team ?? ""}
+                      onChange={(e) => updateUser(u.id, { role: u.role, team: e.target.value || undefined })}
+                    >
+                      <option value="">チームなし</option>
+                      <option value="辻利">辻利</option>
+                      <option value="LUMIA">LUMIA</option>
+                    </select>
+                  </div>
+                  {/* 教育係（Appointerのみ） */}
+                  {isAppointer && (
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-gray-500 shrink-0">教育係（AM）:</span>
+                      <select
+                        className="h-7 rounded border bg-white px-2 text-xs flex-1"
+                        value={u.education_mentor_user_id ?? ""}
+                        onChange={(e) =>
+                          updateUser(u.id, { educationMentorUserId: e.target.value || null })
+                        }
+                      >
+                        <option value="">未設定</option>
+                        {amList.map((am) => (
+                          <option key={am.id} value={am.id}>
+                            {am.nickname ?? am.name ?? am.line_name ?? am.id}
+                            {am.team ? ` (${am.team})` : ""}
+                          </option>
+                        ))}
+                      </select>
+                      {u.education_mentor_user_id && (
+                        <span className="text-xs text-green-600 font-semibold shrink-0">設定済み</span>
+                      )}
+                    </div>
+                  )}
                 </div>
-                <select
-                  className="h-8 rounded border bg-white px-2 text-xs"
-                  value={u.role}
-                  onChange={(e) => updateUser(u.id, e.target.value as Role, u.team)}
-                >
-                  {ROLES.map((r) => <option key={r} value={r}>{r}</option>)}
-                </select>
-                <select
-                  className="h-8 rounded border bg-white px-2 text-xs"
-                  value={u.team ?? ""}
-                  onChange={(e) => updateUser(u.id, u.role, e.target.value || undefined)}
-                >
-                  <option value="">チームなし</option>
-                  <option value="辻利">辻利</option>
-                  <option value="LUMIA">LUMIA</option>
-                </select>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </CardContent>
@@ -639,13 +681,14 @@ interface TestUser {
 }
 
 function TestUserManager() {
-  const [users, setUsers]     = useState<TestUser[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [newName, setNewName] = useState("");
-  const [newRole, setNewRole] = useState<Role>("Appointer");
-  const [newTeam, setNewTeam] = useState("");
-  const [saving, setSaving]   = useState(false);
-  const [msg, setMsg]         = useState<{ ok: boolean; text: string } | null>(null);
+  const [users, setUsers]       = useState<TestUser[]>([]);
+  const [loading, setLoading]   = useState(true);
+  const [newName, setNewName]   = useState("");
+  const [newRole, setNewRole]   = useState<Role>("Appointer");
+  const [newTeam, setNewTeam]   = useState("");
+  const [newMentor, setNewMentor] = useState("");   // Appointer作成時の教育係AM ID
+  const [saving, setSaving]     = useState(false);
+  const [msg, setMsg]           = useState<{ ok: boolean; text: string } | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -656,16 +699,23 @@ function TestUserManager() {
 
   useEffect(() => { load(); }, [load]);
 
+  const amList = users.filter((u) => u.role === "AM");
+
   async function handleAdd() {
     if (!newName.trim()) return;
     setSaving(true); setMsg(null);
     const r = await fetch("/api/test-users", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name: newName.trim(), role: newRole, team: newTeam || undefined }),
+      body: JSON.stringify({
+        name: newName.trim(),
+        role: newRole,
+        team: newTeam || undefined,
+        educationMentorUserId: newRole === "Appointer" && newMentor ? newMentor : undefined,
+      }),
     });
     const d = await r.json();
-    if (r.ok) { setMsg({ ok: true, text: `「${newName}」を追加しました` }); setNewName(""); load(); }
+    if (r.ok) { setMsg({ ok: true, text: `「${newName}」を追加しました` }); setNewName(""); setNewMentor(""); load(); }
     else       { setMsg({ ok: false, text: d.error ?? "追加に失敗しました" }); }
     setSaving(false);
   }
@@ -720,6 +770,25 @@ function TestUserManager() {
               {saving ? "追加中..." : "追加"}
             </Button>
           </div>
+          {/* Appointer選択時：教育係AM選択 */}
+          {newRole === "Appointer" && (
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-gray-600 shrink-0">教育係（AM）:</span>
+              <select
+                value={newMentor}
+                onChange={(e) => setNewMentor(e.target.value)}
+                className="h-8 rounded border bg-white px-2 text-xs flex-1"
+              >
+                <option value="">未設定（後で設定可）</option>
+                {amList.map((am) => (
+                  <option key={am.id} value={am.id}>
+                    {am.nickname ?? am.name ?? am.line_name ?? am.id}
+                    {am.team ? ` (${am.team})` : ""}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
           {msg && (
             <div className={`flex items-center gap-1.5 rounded px-3 py-2 text-xs ${msg.ok ? "bg-green-50 text-green-700" : "bg-red-50 text-red-700"}`}>
               {msg.ok ? <CheckCircle2 className="w-3.5 h-3.5" /> : <AlertCircle className="w-3.5 h-3.5" />}

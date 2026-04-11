@@ -38,7 +38,7 @@ export async function POST(req: NextRequest) {
   if (!session?.user?.dbId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   if (session.user.role !== "Admin") return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
-  const { name, role, team } = await req.json();
+  const { name, role, team, educationMentorUserId } = await req.json();
   if (!name || !role) {
     return NextResponse.json({ error: "name と role は必須です" }, { status: 400 });
   }
@@ -49,14 +49,15 @@ export async function POST(req: NextRequest) {
   const { data, error } = await supabaseAdmin
     .from("users")
     .insert({
-      line_id:          fakeLineId,
-      line_name:        name,
-      nickname:         name,
-      role:             role as Role,
-      team:             team || null,
-      setup_completed:  true,
+      line_id:                   fakeLineId,
+      line_name:                 name,
+      nickname:                  name,
+      role:                      role as Role,
+      team:                      team || null,
+      education_mentor_user_id:  educationMentorUserId || null,
+      setup_completed:           true,
     })
-    .select("id, nickname, role, team")
+    .select("id, nickname, role, team, education_mentor_user_id")
     .single();
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });

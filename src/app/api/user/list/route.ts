@@ -111,7 +111,7 @@ export async function PATCH(req: NextRequest) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  const { userId, role, team } = await req.json();
+  const { userId, role, team, educationMentorUserId } = await req.json();
   if (!userId) {
     return NextResponse.json({ error: "userId is required" }, { status: 400 });
   }
@@ -119,12 +119,16 @@ export async function PATCH(req: NextRequest) {
   const updates: Record<string, unknown> = {};
   if (role !== undefined) updates.role = role;
   if (team !== undefined) updates.team = team || null;
+  // educationMentorUserId: null を明示的に渡した場合は解除、文字列の場合は設定
+  if (educationMentorUserId !== undefined) {
+    updates.education_mentor_user_id = educationMentorUserId || null;
+  }
 
   const { data, error } = await supabaseAdmin
     .from("users")
     .update(updates)
     .eq("id", userId)
-    .select("id, role, team, nickname")
+    .select("id, role, team, nickname, education_mentor_user_id")
     .single();
 
   if (error) {
