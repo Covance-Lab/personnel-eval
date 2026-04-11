@@ -8,6 +8,7 @@ import { TrendingUp, TrendingDown, Minus } from "lucide-react";
 import PageLayout from "@/components/layout/PageLayout";
 import SurveyNotice from "@/components/survey/SurveyNotice";
 import EvaluationResult from "@/components/evaluation/EvaluationResult";
+import TeamEvaluationList from "@/components/evaluation/TeamEvaluationList";
 import RoadmapAppointerRowDB from "@/components/roadmap/RoadmapAppointerRowDB";
 import type { AppointerRoadmap } from "@/types/roadmap";
 import type { Role } from "@/types/user";
@@ -86,12 +87,11 @@ export default function AMPage() {
     if (!myId) { setLoading(false); return; }
 
     try {
-      const teamParam = team ? `&team=${encodeURIComponent(team)}` : "";
+      // AM権限: APIサーバー側で education_mentor_user_id によって自動フィルタされる
+      // teamパラメータは渡さない（チーム全員ではなく自分の管轄のみ取得）
       const [membersRes, teamPerfRes] = await Promise.all([
-        fetch(`/api/user/list?role=Appointer${teamParam}`),
-        team
-          ? fetch(`/api/performance?team=${encodeURIComponent(team)}&year=${thisYear}&month=${thisMonth}`)
-          : Promise.resolve(null),
+        fetch(`/api/user/list?role=Appointer`),
+        fetch(`/api/performance?year=${thisYear}&month=${thisMonth}`),
       ]);
 
       if (membersRes.ok) {
@@ -111,7 +111,7 @@ export default function AMPage() {
         setRoadmaps(rdMaps);
       }
 
-      if (teamPerfRes?.ok) {
+      if (teamPerfRes.ok) {
         const { records } = await teamPerfRes.json();
         setTeamRecords(toClientRecords(records));
       }
@@ -211,8 +211,11 @@ export default function AMPage() {
           })}
         </div>
 
-        {/* 人事評価結果（管理者が公開した場合のみ表示） */}
+        {/* 自分の人事評価結果（管理者が公開した場合のみ表示） */}
         <EvaluationResult role="AM" />
+
+        {/* 管轄アポインター + 自分の評価一覧（公開済みのみ） */}
+        <TeamEvaluationList title="管轄メンバー 人事評価結果" />
 
       </div>
     </PageLayout>

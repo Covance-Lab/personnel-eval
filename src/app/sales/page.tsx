@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { TrendingUp, TrendingDown, Minus } from "lucide-react";
 import PageLayout from "@/components/layout/PageLayout";
 import SurveyNotice from "@/components/survey/SurveyNotice";
+import TeamEvaluationList from "@/components/evaluation/TeamEvaluationList";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
   Legend, ResponsiveContainer, LineChart, Line,
@@ -186,6 +187,9 @@ export default function SalesPage() {
             </ResponsiveContainer>
           </CardContent>
         </Card>
+
+        {/* チームAM・アポインターの人事評価一覧（公開済みのみ） */}
+        <TeamEvaluationList title="チーム 人事評価結果" />
 
       </div>
     </PageLayout>
