@@ -5,7 +5,7 @@ import { useRouter, usePathname } from "next/navigation";
 import { signOut } from "next-auth/react";
 import {
   Menu, X, BarChart2, Users, Settings, User, LogOut,
-  TrendingUp, ChevronRight, BookOpen, UserCircle,
+  TrendingUp, ChevronRight, UserCircle,
 } from "lucide-react";
 import type { Role } from "@/types/user";
 
@@ -37,9 +37,9 @@ function getNavItems(role: Role, currentPath: string, router: ReturnType<typeof 
       ];
     case "AM":
       return [
-        { label: "管轄メンバー実績", href: "/am",         icon: <TrendingUp className="w-5 h-5" />,  onClick: go("/am"),              active: isActive("/am") },
-        { label: "人事評価",    href: "/hr",              icon: <Users className="w-5 h-5" />,       onClick: go("/hr"),              active: isActive("/hr") },
-        { label: "プロフィール設定", href: "/profile/setup", icon: <User className="w-5 h-5" />,    onClick: go("/profile/setup"),   active: isActive("/profile/setup") },
+        { label: "数値管理",       href: "/am",               icon: <BarChart2 className="w-5 h-5" />,   onClick: go("/am"),               active: currentPath === "/am" },
+        { label: "アポインター管理", href: "/am/appointers",   icon: <Users className="w-5 h-5" />,       onClick: go("/am/appointers"),    active: isActive("/am/appointers") },
+        { label: "プロフィール設定", href: "/profile/setup",   icon: <User className="w-5 h-5" />,        onClick: go("/profile/setup"),    active: isActive("/profile/setup") },
       ];
     case "Appointer":
       return [
