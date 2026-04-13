@@ -77,8 +77,8 @@ function DonutChart({ label, value, goal, suffix, decimals = 0 }: DonutProps) {
               <Cell fill={REMAINING_COLOR} />
             </Pie>
             <Tooltip
-              formatter={(v: number, name: string) =>
-                name === "達成" ? [`${Math.round(v * 100)}%`, "達成率"] : null
+              formatter={(v: unknown, name: unknown) =>
+                name === "達成" ? [`${Math.round((v as number) * 100)}%`, "達成率"] : null
               }
             />
           </PieChart>
