@@ -129,12 +129,12 @@ export async function POST(req: NextRequest) {
     const self = selfMap.get(u.id);
     const evals = evalByTarget.get(u.id) ?? [];
 
-    // 定量スコア（Appointerのみ）
+    // 定量スコア（Appointerのみ。データなし → 1点デフォルト）
     const dmCount    = perf?.dm_count    ?? null;
     const appoCount  = perf?.appo_count  ?? null;
     const bSetRate   = perf?.appointment_rate != null ? Number(perf.appointment_rate) : null;
-    const workloadScore   = u.role === "Appointer" && dmCount   != null ? calcWorkload(dmCount)     : null;
-    const performanceScore = u.role === "Appointer" && bSetRate != null ? calcPerformance(bSetRate) : null;
+    const workloadScore   = u.role === "Appointer" ? (dmCount   != null ? calcWorkload(dmCount)     : 1) : null;
+    const performanceScore = u.role === "Appointer" ? (bSetRate != null ? calcPerformance(bSetRate) : 1) : null;
 
     // 自己評価スコア
     const disciplineSelf   = self?.q1_score ?? null;

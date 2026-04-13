@@ -5,7 +5,11 @@ import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import PageLayout from "@/components/layout/PageLayout";
 import SurveyNotice from "@/components/survey/SurveyNotice";
-import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from "recharts";
+import EvaluationResult from "@/components/evaluation/EvaluationResult";
+import {
+  PieChart, Pie, Cell, ResponsiveContainer, Tooltip,
+  LineChart, Line, XAxis, YAxis, CartesianGrid, Legend,
+} from "recharts";
 import type { PerformanceRecord } from "@/types/performance";
 
 // ─── 目標値 ───────────────────────────────────────────────────────
@@ -107,8 +111,9 @@ export default function AMPage() {
   const router = useRouter();
   const { data: session, status } = useSession();
 
-  const [teamRecords, setTeamRecords] = useState<PerformanceRecord[]>([]);
-  const [loading, setLoading]         = useState(true);
+  const [teamRecords, setTeamRecords]   = useState<PerformanceRecord[]>([]);
+  const [allRecords, setAllRecords]     = useState<PerformanceRecord[]>([]);
+  const [loading, setLoading]           = useState(true);
 
   useEffect(() => {
     if (status === "unauthenticated") router.replace("/login");
@@ -127,10 +132,17 @@ export default function AMPage() {
     if (!myId) { setLoading(false); return; }
 
     try {
-      const res = await fetch(`/api/performance?year=${thisYear}&month=${thisMonth}`);
-      if (res.ok) {
-        const { records } = await res.json();
+      const [currRes, allRes] = await Promise.all([
+        fetch(`/api/performance?year=${thisYear}&month=${thisMonth}`),
+        fetch(`/api/performance`),
+      ]);
+      if (currRes.ok) {
+        const { records } = await currRes.json();
         setTeamRecords(toClientRecords(records ?? []));
+      }
+      if (allRes.ok) {
+        const { records } = await allRes.json();
+        setAllRecords(toClientRecords(records ?? []));
       }
     } finally {
       setLoading(false);
@@ -147,10 +159,27 @@ export default function AMPage() {
   const userName = nickname ?? name ?? "AM";
   const myDbId   = session?.user?.dbId ?? "";
 
-  // 管轄合計
+  // 管轄合計（当月）
   const totalDm    = teamRecords.reduce((s, r) => s + (r.dmCount   ?? 0), 0);
   const totalBSet  = teamRecords.reduce((s, r) => s + (r.appoCount ?? 0), 0);
   const bSetRate   = totalDm > 0 ? Math.round((totalBSet / totalDm) * 10000) / 100 : 0;
+
+  // 月次推移データ（全履歴を月ごとに集計）
+  const trendMap = new Map<string, { dm: number; bSet: number; label: string; sortKey: number }>();
+  for (const r of allRecords) {
+    const key = `${r.year}-${String(r.month).padStart(2, "0")}`;
+    const label = `${r.year}/${r.month}`;
+    const existing = trendMap.get(key) ?? { dm: 0, bSet: 0, label, sortKey: r.year * 100 + r.month };
+    trendMap.set(key, { ...existing, dm: existing.dm + (r.dmCount ?? 0), bSet: existing.bSet + (r.appoCount ?? 0) });
+  }
+  const trendData = Array.from(trendMap.values())
+    .sort((a, b) => a.sortKey - b.sortKey)
+    .map((v) => ({
+      label: v.label,
+      DM数: v.dm,
+      B設定数: v.bSet,
+      B設定率: v.dm > 0 ? Math.round((v.bSet / v.dm) * 10000) / 100 : 0,
+    }));
 
   return (
     <PageLayout title="数値管理" role={role ?? "AM"} userName={userName} userImage={image} userTeam={team}>
@@ -190,6 +219,46 @@ export default function AMPage() {
           <p className="font-semibold text-gray-600">今月の目標値</p>
           <p>DM数: {GOALS.dmCount.toLocaleString()}通　B設定数: {GOALS.bSetCount}件　B設定率: {GOALS.bSetRate}%</p>
         </div>
+
+        {/* 月次推移グラフ */}
+        {trendData.length > 1 && (
+          <div className="bg-white rounded-2xl border p-4 space-y-3">
+            <p className="text-xs font-semibold text-gray-600">月次推移 — チーム合計</p>
+
+            {/* DM数・B設定数 */}
+            <div>
+              <p className="text-xs text-gray-400 mb-1">DM数 / B設定数</p>
+              <ResponsiveContainer width="100%" height={180}>
+                <LineChart data={trendData} margin={{ top: 5, right: 10, bottom: 5, left: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                  <XAxis dataKey="label" tick={{ fontSize: 10 }} />
+                  <YAxis tick={{ fontSize: 10 }} width={40} />
+                  <Tooltip />
+                  <Legend wrapperStyle={{ fontSize: 11 }} />
+                  <Line type="monotone" dataKey="DM数" stroke="#6366f1" strokeWidth={2} dot={{ r: 3 }} />
+                  <Line type="monotone" dataKey="B設定数" stroke="#ec4899" strokeWidth={2} dot={{ r: 3 }} />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+
+            {/* B設定率 */}
+            <div>
+              <p className="text-xs text-gray-400 mb-1">B設定率（%）</p>
+              <ResponsiveContainer width="100%" height={140}>
+                <LineChart data={trendData} margin={{ top: 5, right: 10, bottom: 5, left: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                  <XAxis dataKey="label" tick={{ fontSize: 10 }} />
+                  <YAxis tick={{ fontSize: 10 }} width={40} unit="%" />
+                  <Tooltip formatter={(v: unknown) => [`${v}%`, "B設定率"]} />
+                  <Line type="monotone" dataKey="B設定率" stroke="#22c55e" strokeWidth={2} dot={{ r: 3 }} />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+        )}
+
+        {/* 人事評価結果（管理者が公開した場合のみ表示） */}
+        <EvaluationResult role="AM" />
 
       </div>
     </PageLayout>

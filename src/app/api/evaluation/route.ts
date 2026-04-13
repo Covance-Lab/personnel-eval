@@ -28,6 +28,40 @@ export async function GET(req: NextRequest) {
   const myRole = session.user.role;
   const myTeam = session.user.team;
 
+  // ─── view=member: AM が特定の管轄アポインターの評価を取得 ──────────────────
+  if (view === "member") {
+    const targetId = searchParams.get("userId");
+    if (!targetId) return NextResponse.json({ error: "userId required" }, { status: 400 });
+
+    if (!["Admin", "AM", "Sales"].includes(myRole)) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
+    // AM は自分が管轄するアポインターのみ
+    if (myRole === "AM") {
+      const { data: target } = await supabaseAdmin
+        .from("users")
+        .select("education_mentor_user_id")
+        .eq("id", targetId)
+        .single();
+      if (target?.education_mentor_user_id !== myId) {
+        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+      }
+    }
+
+    const { data, error } = await supabaseAdmin
+      .from("evaluation_results")
+      .select("*")
+      .eq("user_id", targetId)
+      .eq("year", year)
+      .eq("month", month)
+      .eq("visible_to_user", true)
+      .maybeSingle();
+
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ result: data ?? null });
+  }
+
   // ─── view=team ────────────────────────────────────────────────────────────
   if (view === "team") {
     // Admin/AM/Sales のみ許可

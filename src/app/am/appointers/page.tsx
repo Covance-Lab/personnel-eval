@@ -104,14 +104,15 @@ function AppointerDetail({
 
   useEffect(() => {
     const now = new Date();
-    fetch(`/api/evaluation?view=self&year=${now.getFullYear()}&month=${now.getMonth() + 1}`)
+    fetch(`/api/evaluation?view=member&userId=${user.id}&year=${now.getFullYear()}&month=${now.getMonth() + 1}`)
       .then((r) => r.ok ? r.json() : null)
       .then((d) => setEvalData(d?.result ?? null))
       .catch(() => {});
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user.id]);
 
   const radarData = evalData ? [
+    { subject: "稼働量",   自己: evalData.workload_score,    他者: evalData.workload_score },
+    { subject: "成果",     自己: evalData.performance_score, 他者: evalData.performance_score },
     { subject: "規律",     自己: evalData.discipline_self,   他者: evalData.discipline_other   != null ? +Number(evalData.discipline_other).toFixed(1)   : null },
     { subject: "吸収力",   自己: evalData.absorption_self,   他者: evalData.absorption_other   != null ? +Number(evalData.absorption_other).toFixed(1)   : null },
     { subject: "組織貢献", 自己: evalData.contribution_self, 他者: evalData.contribution_other != null ? +Number(evalData.contribution_other).toFixed(1) : null },
@@ -206,16 +207,13 @@ function AppointerDetail({
                         </tr>
                       </thead>
                       <tbody className="divide-y">
-                        {[
-                          { label: "規律",    s: evalData.discipline_self,   o: evalData.discipline_other },
-                          { label: "吸収力",  s: evalData.absorption_self,   o: evalData.absorption_other },
-                          { label: "組織貢献", s: evalData.contribution_self, o: evalData.contribution_other },
-                          { label: "思考力",  s: evalData.thinking_self,     o: evalData.thinking_other },
-                        ].map(({ label, s, o }) => (
-                          <tr key={label}>
-                            <td className="px-3 py-1.5 font-medium text-gray-700">{label}</td>
-                            <td className="px-3 py-1.5 text-center text-indigo-600 font-semibold">{s ?? "—"}</td>
-                            <td className="px-3 py-1.5 text-center text-pink-600 font-semibold">{o != null ? Number(o).toFixed(1) : "—"}</td>
+                        {radarData.map(({ subject, 自己: s, 他者: o }) => (
+                          <tr key={subject}>
+                            <td className="px-3 py-1.5 font-medium text-gray-700">{subject}</td>
+                            <td className="px-3 py-1.5 text-center text-indigo-600 font-semibold">{s != null ? s : "—"}</td>
+                            <td className="px-3 py-1.5 text-center text-pink-600 font-semibold">
+                              {o != null ? (Number.isInteger(o) ? o : Number(o).toFixed(1)) : "—"}
+                            </td>
                           </tr>
                         ))}
                       </tbody>

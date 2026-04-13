@@ -75,30 +75,23 @@ export default function EvaluationResult({ role }: EvaluationResultProps) {
   const prevDate  = new Date(year, month - 2, 1);
   const prevLabel = `${prevDate.getFullYear()}年${prevDate.getMonth() + 1}月`;
 
-  const radarData = [
-    {
-      subject: "規律",
-      自己評価: data.discipline_self,
-      他者評価: data.discipline_other != null ? Number(data.discipline_other.toFixed(1)) : null,
-    },
-    {
-      subject: "吸収力",
-      自己評価: data.absorption_self,
-      他者評価: data.absorption_other != null ? Number(data.absorption_other.toFixed(1)) : null,
-    },
-    {
-      subject: "組織貢献",
-      自己評価: data.contribution_self,
-      他者評価: data.contribution_other != null ? Number(data.contribution_other.toFixed(1)) : null,
-    },
-    {
-      subject: "思考力",
-      自己評価: data.thinking_self,
-      他者評価: data.thinking_other != null ? Number(data.thinking_other.toFixed(1)) : null,
-    },
+  // Appointer: 6軸（稼働量・成果は同値で重ねる）、AM: 4軸（定性のみ）
+  const qualitativeItems = [
+    { subject: "規律",     自己評価: data.discipline_self,   他者評価: data.discipline_other   != null ? +Number(data.discipline_other).toFixed(1)   : null },
+    { subject: "吸収力",   自己評価: data.absorption_self,   他者評価: data.absorption_other   != null ? +Number(data.absorption_other).toFixed(1)   : null },
+    { subject: "組織貢献", 自己評価: data.contribution_self, 他者評価: data.contribution_other != null ? +Number(data.contribution_other).toFixed(1) : null },
+    { subject: "思考力",   自己評価: data.thinking_self,     他者評価: data.thinking_other     != null ? +Number(data.thinking_other).toFixed(1)     : null },
   ];
 
-  const hasQualitative = radarData.some((d) => d.自己評価 != null || d.他者評価 != null);
+  const radarData = role === "Appointer"
+    ? [
+        { subject: "稼働量", 自己評価: data.workload_score,    他者評価: data.workload_score },
+        { subject: "成果",   自己評価: data.performance_score, 他者評価: data.performance_score },
+        ...qualitativeItems,
+      ]
+    : qualitativeItems;
+
+  const hasRadar = radarData.some((d) => d.自己評価 != null || d.他者評価 != null);
 
   return (
     <Card className="border border-indigo-200 bg-indigo-50/30">
@@ -131,7 +124,7 @@ export default function EvaluationResult({ role }: EvaluationResultProps) {
         )}
 
         {/* 定性評価レーダーチャート */}
-        {hasQualitative && (
+        {hasRadar && (
           <div className="space-y-2">
             <p className="text-xs font-semibold text-gray-700">定性評価（アンケート結果）</p>
             <p className="text-xs text-gray-400">
@@ -159,17 +152,12 @@ export default function EvaluationResult({ role }: EvaluationResultProps) {
                   </tr>
                 </thead>
                 <tbody className="divide-y bg-white">
-                  {[
-                    { label: "規律",    self: data.discipline_self,   other: data.discipline_other },
-                    { label: "吸収力",  self: data.absorption_self,   other: data.absorption_other },
-                    { label: "組織貢献", self: data.contribution_self, other: data.contribution_other },
-                    { label: "思考力",  self: data.thinking_self,     other: data.thinking_other },
-                  ].map(({ label, self, other }) => (
-                    <tr key={label}>
-                      <td className="px-3 py-2 font-medium text-gray-700">{label}</td>
-                      <td className="px-3 py-2 text-center text-indigo-600 font-semibold">{self ?? "—"}</td>
+                  {radarData.map(({ subject, 自己評価: s, 他者評価: o }) => (
+                    <tr key={subject}>
+                      <td className="px-3 py-2 font-medium text-gray-700">{subject}</td>
+                      <td className="px-3 py-2 text-center text-indigo-600 font-semibold">{s != null ? s : "—"}</td>
                       <td className="px-3 py-2 text-center text-pink-600 font-semibold">
-                        {other != null ? Number(other).toFixed(1) : "—"}
+                        {o != null ? (Number.isInteger(o) ? o : Number(o).toFixed(1)) : "—"}
                       </td>
                     </tr>
                   ))}

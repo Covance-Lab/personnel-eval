@@ -161,8 +161,6 @@ export default function AppointerPage() {
               <RoadmapProgress
                 roadmap={roadmap}
                 label="デビュー・ロードマップ"
-                showMemo
-                memo={roadmap.amMemo}
               />
             </CardContent>
           </Card>
