@@ -50,16 +50,27 @@ export async function GET(req: NextRequest) {
       .eq("role", "Appointer")
       .eq("setup_completed", true);
 
-    const pages = (appointers ?? []).map((u) => ({
-      targetId:  u.id,
-      targetName: u.nickname ?? u.name ?? u.id,
-      type: "eval",
-      submitted: submittedMap.has(`${u.id}:eval`),
-    }));
-    // 最後に自己評価
-    pages.push({ targetId: myId, targetName: "自己評価", type: "self", submitted: submittedMap.has(`${myId}:self`) });
+    const pages: { targetId: string; targetName: string; type: string; submitted: boolean }[] = [];
 
-    const fullySubmitted = pages.every((p) => p.submitted);
+    // 管轄アポインター評価（education_mentor_user_idが設定済みのアポインターのみ）
+    for (const u of appointers ?? []) {
+      pages.push({
+        targetId:   u.id,
+        targetName: u.nickname ?? u.name ?? u.id,
+        type:       "eval",
+        submitted:  submittedMap.has(`${u.id}:eval`),
+      });
+    }
+    // 最後に自己評価（常に含める）
+    pages.push({
+      targetId:   myId,
+      targetName: "自己評価",
+      type:       "self",
+      submitted:  submittedMap.has(`${myId}:self`),
+    });
+
+    // 全ページが提出済みの場合のみ fullySubmitted=true
+    const fullySubmitted = pages.length > 0 && pages.every((p) => p.submitted);
     return NextResponse.json({ role: "AM", fullySubmitted, pages });
   }
 
@@ -82,7 +93,8 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ role: "Sales", fullySubmitted, pages });
   }
 
-  return NextResponse.json({ role: myRole, fullySubmitted: true, pages: [] });
+  // AM/Sales/Appointer以外（Admin等）はアンケート対象外
+  return NextResponse.json({ role: myRole, fullySubmitted: false, pages: [], inactive: true });
 }
 
 export async function POST(req: NextRequest) {
