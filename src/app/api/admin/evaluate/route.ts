@@ -150,13 +150,6 @@ export async function POST(req: NextRequest) {
     (selfAnswers ?? []).map((a) => [a.respondent_id, a])
   );
 
-  console.log("[evaluate] year=%d month=%d prevYear=%d prevMonth=%d", year, month, prevYear, prevMonth);
-  console.log("[evaluate] users count=%d", users.length);
-  console.log("[evaluate] salesUsers:", (salesUsers ?? []).map((s) => ({ id: s.id, team: s.team })));
-  console.log("[evaluate] selfAnswers count=%d", (selfAnswers ?? []).length);
-  console.log("[evaluate] evalAnswers count=%d", (evalAnswers ?? []).length);
-  console.log("[evaluate] salesByTeam:", Object.fromEntries([...salesByTeam.entries()].map(([k, v]) => [k, [...v]])));
-
   const rows = users.map((u) => {
     const perf   = perfMap.get(u.id);
     const self   = selfMap.get(u.id);
@@ -179,14 +172,10 @@ export async function POST(req: NextRequest) {
       const missingSales = [...salesInTeam].filter((sid) => !evalRespondentIds.has(sid));
       const hasSalesEval = salesInTeam.size > 0 && missingSales.length === 0;
       allRespondentsReady = hasSelf && hasAMEval && hasSalesEval;
-      console.log("[evaluate] Appointer %s: hasSelf=%s hasAMEval=%s (amId=%s) hasSalesEval=%s salesInTeam=%d evalRespondents=%s missingSales=%s => ready=%s",
-        u.nickname ?? u.id, hasSelf, hasAMEval, amId, hasSalesEval, salesInTeam.size, [...evalRespondentIds].join(","), missingSales.join(","), allRespondentsReady);
     } else if (u.role === "AM") {
       const missingSales = [...salesInTeam].filter((sid) => !evalRespondentIds.has(sid));
       const hasSalesEval = salesInTeam.size > 0 && missingSales.length === 0;
       allRespondentsReady = hasSelf && hasSalesEval;
-      console.log("[evaluate] AM %s: hasSelf=%s hasSalesEval=%s salesInTeam=%d evalRespondents=%s missingSales=%s => ready=%s",
-        u.nickname ?? u.id, hasSelf, hasSalesEval, salesInTeam.size, [...evalRespondentIds].join(","), missingSales.join(","), allRespondentsReady);
     } else {
       allRespondentsReady = true;
     }
