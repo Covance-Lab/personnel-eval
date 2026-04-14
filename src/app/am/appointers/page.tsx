@@ -57,6 +57,10 @@ function toClientRecord(r: Record<string, unknown>): PerformanceRecord {
     team:            r.team as "辻利" | "LUMIA",
     syncedAt:        r.synced_at as string,
     expectedIncome:  r.expected_income as number | undefined,
+    bExecutedCount:  (r.b_executed_count as number | undefined) ?? undefined,
+    aSetCount:       (r.a_set_count as number | undefined) ?? undefined,
+    aExecutedCount:  (r.a_executed_count as number | undefined) ?? undefined,
+    contractCount:   (r.contract_count as number | undefined) ?? undefined,
   };
 }
 
@@ -100,14 +104,16 @@ function AppointerDetail({
   onRoadmapUpdated: (r: AppointerRoadmap) => void;
 }) {
   const [evalData, setEvalData] = useState<EvalData | null>(null);
+  const [evalLoading, setEvalLoading] = useState(true);
   const [tab, setTab] = useState<"profile" | "eval" | "roadmap">("profile");
 
   useEffect(() => {
+    setEvalLoading(true);
     const now = new Date();
     fetch(`/api/evaluation?view=member&userId=${user.id}&year=${now.getFullYear()}&month=${now.getMonth() + 1}`)
       .then((r) => r.ok ? r.json() : null)
-      .then((d) => setEvalData(d?.result ?? null))
-      .catch(() => {});
+      .then((d) => { setEvalData(d?.result ?? null); setEvalLoading(false); })
+      .catch(() => setEvalLoading(false));
   }, [user.id]);
 
   const radarData = evalData ? [
@@ -162,7 +168,9 @@ function AppointerDetail({
       {/* 人事評価 */}
       {tab === "eval" && (
         <div className="space-y-3">
-          {!evalData ? (
+          {evalLoading ? (
+            <p className="text-xs text-gray-400 text-center py-4">読み込み中...</p>
+          ) : !evalData ? (
             <p className="text-xs text-gray-400 text-center py-4">評価結果はまだ公開されていません</p>
           ) : (
             <>

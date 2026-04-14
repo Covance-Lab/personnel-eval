@@ -75,7 +75,11 @@ export async function GET(req: NextRequest) {
     if (year)  query = query.eq("year", year);
     if (month) query = query.eq("month", month);
   } else {
-    // パラメータなし
+    // userId/team 指定なし — ロールベースのフィルタリング
+    // year/month が指定されていれば絞り込む
+    if (year)  query = query.eq("year", year);
+    if (month) query = query.eq("month", month);
+
     if (userRole === "Admin") {
       // Admin: 全件
     } else if (userRole === "Sales") {

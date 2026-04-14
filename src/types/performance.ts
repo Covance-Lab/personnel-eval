@@ -61,7 +61,7 @@ export interface PerformanceRecord {
   month: number;
   /** 累計DM送信数 */
   dmCount: number;
-  /** アポ獲得数 */
+  /** アポ獲得数 (B設定数) */
   appoCount: number;
   /** アポ獲得率 (appoCount / dmCount) */
   appointmentRate: number;
@@ -73,6 +73,14 @@ export interface PerformanceRecord {
   team: TeamGroup;
   /** 同期日時 */
   syncedAt: string;
+  /** B実施数 */
+  bExecutedCount?: number;
+  /** A設定数 */
+  aSetCount?: number;
+  /** A実施数 */
+  aExecutedCount?: number;
+  /** 契約数 */
+  contractCount?: number;
 }
 
 // ─── 同期ログ ───────────────────────────────────────────────────

@@ -32,6 +32,10 @@ function toClientRecords(rows: Record<string, unknown>[]): PerformanceRecord[] {
     team:            r.team as "辻利" | "LUMIA",
     syncedAt:        r.synced_at as string,
     expectedIncome:  r.expected_income as number | undefined,
+    bExecutedCount:  (r.b_executed_count as number | undefined) ?? undefined,
+    aSetCount:       (r.a_set_count as number | undefined) ?? undefined,
+    aExecutedCount:  (r.a_executed_count as number | undefined) ?? undefined,
+    contractCount:   (r.contract_count as number | undefined) ?? undefined,
   }));
 }
 
@@ -165,21 +169,37 @@ export default function AMPage() {
   const bSetRate   = totalDm > 0 ? Math.round((totalBSet / totalDm) * 10000) / 100 : 0;
 
   // 月次推移データ（全履歴を月ごとに集計）
-  const trendMap = new Map<string, { dm: number; bSet: number; label: string; sortKey: number }>();
+  type TrendEntry = { dm: number; bSet: number; bExec: number; aSet: number; aExec: number; contract: number; label: string; sortKey: number };
+  const trendMap = new Map<string, TrendEntry>();
   for (const r of allRecords) {
     const key = `${r.year}-${String(r.month).padStart(2, "0")}`;
     const label = `${r.year}/${r.month}`;
-    const existing = trendMap.get(key) ?? { dm: 0, bSet: 0, label, sortKey: r.year * 100 + r.month };
-    trendMap.set(key, { ...existing, dm: existing.dm + (r.dmCount ?? 0), bSet: existing.bSet + (r.appoCount ?? 0) });
+    const ex = trendMap.get(key) ?? { dm: 0, bSet: 0, bExec: 0, aSet: 0, aExec: 0, contract: 0, label, sortKey: r.year * 100 + r.month };
+    trendMap.set(key, {
+      ...ex,
+      dm:       ex.dm       + (r.dmCount          ?? 0),
+      bSet:     ex.bSet     + (r.appoCount         ?? 0),
+      bExec:    ex.bExec    + (r.bExecutedCount    ?? 0),
+      aSet:     ex.aSet     + (r.aSetCount         ?? 0),
+      aExec:    ex.aExec    + (r.aExecutedCount    ?? 0),
+      contract: ex.contract + (r.contractCount     ?? 0),
+    });
   }
   const trendData = Array.from(trendMap.values())
     .sort((a, b) => a.sortKey - b.sortKey)
     .map((v) => ({
-      label: v.label,
-      DM数: v.dm,
+      label:  v.label,
+      DM数:   v.dm,
       B設定数: v.bSet,
       B設定率: v.dm > 0 ? Math.round((v.bSet / v.dm) * 10000) / 100 : 0,
+      B実施:   v.bExec,
+      A設定:   v.aSet,
+      A実施:   v.aExec,
+      契約:    v.contract,
     }));
+
+  // ファネルデータが1件でも存在するか
+  const hasFunnelData = trendData.some((d) => d.B実施 > 0 || d.A設定 > 0 || d.A実施 > 0 || d.契約 > 0);
 
   return (
     <PageLayout title="数値管理" role={role ?? "AM"} userName={userName} userImage={image} userTeam={team}>
@@ -220,10 +240,10 @@ export default function AMPage() {
           <p>DM数: {GOALS.dmCount.toLocaleString()}通　B設定数: {GOALS.bSetCount}件　B設定率: {GOALS.bSetRate}%</p>
         </div>
 
-        {/* 月次推移グラフ */}
-        {trendData.length > 1 && (
+        {/* 月次推移グラフ① — アポインターチーム実績 */}
+        {trendData.length > 0 && (
           <div className="bg-white rounded-2xl border p-4 space-y-3">
-            <p className="text-xs font-semibold text-gray-600">月次推移 — チーム合計</p>
+            <p className="text-xs font-semibold text-gray-600">月次推移 — アポインターチーム</p>
 
             {/* DM数・B設定数 */}
             <div>
@@ -254,6 +274,28 @@ export default function AMPage() {
                 </LineChart>
               </ResponsiveContainer>
             </div>
+          </div>
+        )}
+
+        {/* 月次推移グラフ② — セールスファネル */}
+        {hasFunnelData && (
+          <div className="bg-white rounded-2xl border p-4 space-y-3">
+            <p className="text-xs font-semibold text-gray-600">月次推移 — セールスファネル</p>
+            <p className="text-xs text-gray-400">B設定 → B実施 → A設定 → A実施 → 契約</p>
+            <ResponsiveContainer width="100%" height={200}>
+              <LineChart data={trendData} margin={{ top: 5, right: 10, bottom: 5, left: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                <XAxis dataKey="label" tick={{ fontSize: 10 }} />
+                <YAxis tick={{ fontSize: 10 }} width={30} />
+                <Tooltip />
+                <Legend wrapperStyle={{ fontSize: 11 }} />
+                <Line type="monotone" dataKey="B設定数" stroke="#ec4899" strokeWidth={2} dot={{ r: 3 }} />
+                <Line type="monotone" dataKey="B実施"   stroke="#f97316" strokeWidth={2} dot={{ r: 3 }} />
+                <Line type="monotone" dataKey="A設定"   stroke="#eab308" strokeWidth={2} dot={{ r: 3 }} />
+                <Line type="monotone" dataKey="A実施"   stroke="#3b82f6" strokeWidth={2} dot={{ r: 3 }} />
+                <Line type="monotone" dataKey="契約"    stroke="#22c55e" strokeWidth={2} dot={{ r: 3 }} />
+              </LineChart>
+            </ResponsiveContainer>
           </div>
         )}
 

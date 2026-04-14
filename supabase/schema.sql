@@ -40,13 +40,24 @@ CREATE TABLE IF NOT EXISTS performance_records (
   year                INTEGER NOT NULL,
   month               INTEGER NOT NULL CHECK (month BETWEEN 1 AND 12),
   dm_count            INTEGER NOT NULL DEFAULT 0,
-  appo_count          INTEGER NOT NULL DEFAULT 0,
+  appo_count          INTEGER NOT NULL DEFAULT 0,         -- B設定数
   appointment_rate    DECIMAL(5,2) NOT NULL DEFAULT 0,    -- % (例: 15.5)
   income              INTEGER NOT NULL DEFAULT 0,          -- 見込み月収（円）
   team                TEXT,
   synced_at           TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  -- セールスファネル列（クローザー/営業マンが入力）
+  b_executed_count    INTEGER DEFAULT 0,                  -- B実施数
+  a_set_count         INTEGER DEFAULT 0,                  -- A設定数
+  a_executed_count    INTEGER DEFAULT 0,                  -- A実施数
+  contract_count      INTEGER DEFAULT 0,                  -- 契約数
   UNIQUE (user_id, year, month)
 );
+
+-- 既存テーブルへのカラム追加（既にテーブルが存在する場合）
+ALTER TABLE performance_records ADD COLUMN IF NOT EXISTS b_executed_count INTEGER DEFAULT 0;
+ALTER TABLE performance_records ADD COLUMN IF NOT EXISTS a_set_count      INTEGER DEFAULT 0;
+ALTER TABLE performance_records ADD COLUMN IF NOT EXISTS a_executed_count INTEGER DEFAULT 0;
+ALTER TABLE performance_records ADD COLUMN IF NOT EXISTS contract_count   INTEGER DEFAULT 0;
 
 -- ─── sync_logs テーブル ───────────────────────────────────────────
 -- スプシ同期の実行ログ
