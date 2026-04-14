@@ -46,11 +46,21 @@ export async function GET(req: NextRequest) {
     .select("*, users(nickname, name, role, team)")
     .eq("year", year)
     .eq("month", month)
-    .order("created_at");
+    .order("calculated_at");
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-  return NextResponse.json({ results: data ?? [] });
+  // all_responded: 定性スコアが1つでも null or 0 以外であれば回答済みと判定
+  const results = (data ?? []).map((r) => ({
+    ...r,
+    all_responded:
+      r.discipline_self != null && r.discipline_self > 0 &&
+      r.absorption_self != null && r.absorption_self > 0 &&
+      r.contribution_self != null && r.contribution_self > 0 &&
+      r.thinking_self != null && r.thinking_self > 0,
+  }));
+
+  return NextResponse.json({ results });
 }
 
 // ─── POST: 評価を算出・upsert ──────────────────────────────────────────────
@@ -198,19 +208,25 @@ export async function POST(req: NextRequest) {
       absorption_other:   absorptionOther,
       contribution_other: contributionOther,
       thinking_other:     thinkingOther,
-      all_responded:      allRespondentsReady,
       visible_to_user:    false,
       calculated_at:      new Date().toISOString(),
+      // all_responded はDBに保存せず返却のみ
+      _all_responded:     allRespondentsReady,
     };
   });
 
+  // DB upsert 用から _all_responded を除く
+  const dbRows = rows.map(({ _all_responded: _, ...rest }) => rest);
+
   const { error } = await supabaseAdmin
     .from("evaluation_results")
-    .upsert(rows, { onConflict: "year,month,user_id" });
+    .upsert(dbRows, { onConflict: "year,month,user_id" });
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-  return NextResponse.json({ ok: true, count: rows.length });
+  // レスポンスには all_responded を含める（_プレフィックスを外す）
+  const responseRows = rows.map(({ _all_responded, ...rest }) => ({ ...rest, all_responded: _all_responded }));
+  return NextResponse.json({ ok: true, count: rows.length, results: responseRows });
 }
 
 // ─── PATCH: 表示/非表示切替（個別 or 一括配信） ────────────────────────────
