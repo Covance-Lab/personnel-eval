@@ -5,9 +5,10 @@ import { useRouter, usePathname } from "next/navigation";
 import { signOut } from "next-auth/react";
 import {
   Menu, X, BarChart2, Users, Settings, User, LogOut,
-  TrendingUp, ChevronRight, UserCircle,
+  TrendingUp, ChevronRight, UserCircle, RefreshCw,
 } from "lucide-react";
 import type { Role } from "@/types/user";
+import { useViewAs } from "@/contexts/ViewAsContext";
 
 interface NavItem {
   label: string;
@@ -55,6 +56,8 @@ function getNavItems(role: Role, currentPath: string, router: ReturnType<typeof 
   }
 }
 
+const TEAMS = ["辻利", "LUMIA"] as const;
+
 interface NavMenuProps {
   role: Role;
   userName: string;
@@ -66,9 +69,13 @@ export default function NavMenu({ role, userName, userImage, userTeam }: NavMenu
   const router = useRouter();
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
+  const [showTeamPicker, setShowTeamPicker] = useState(false);
   const drawerRef = useRef<HTMLDivElement>(null);
+  const { viewAs, setViewAs, clearViewAs } = useViewAs();
 
-  const items = getNavItems(role, pathname, router);
+  // 表示上のロール（Adminがビューアズ中はSales扱い）
+  const effectiveRole = (role === "Admin" && viewAs.role === "Sales") ? "Sales" : role;
+  const items = getNavItems(effectiveRole as Role, pathname, router);
 
   // 外側クリックで閉じる
   useEffect(() => {
@@ -84,7 +91,7 @@ export default function NavMenu({ role, userName, userImage, userTeam }: NavMenu
   // ESCキーで閉じる
   useEffect(() => {
     function handleKey(e: KeyboardEvent) {
-      if (e.key === "Escape") setOpen(false);
+      if (e.key === "Escape") { setOpen(false); setShowTeamPicker(false); }
     }
     document.addEventListener("keydown", handleKey);
     return () => document.removeEventListener("keydown", handleKey);
@@ -94,6 +101,10 @@ export default function NavMenu({ role, userName, userImage, userTeam }: NavMenu
     Admin: "管理者", Sales: "営業マン", AM: "アポインターマネージャー",
     Appointer: "アポインター", Bridge: "ブリッジ", Closer: "クローザー",
   };
+
+  const displayRoleLabel = viewAs.role === "Sales"
+    ? `営業マン（${viewAs.team}）として表示中`
+    : (roleLabel[role] ?? role);
 
   return (
     <>
@@ -131,7 +142,7 @@ export default function NavMenu({ role, userName, userImage, userTeam }: NavMenu
             )}
             <div className="min-w-0">
               <p className="font-semibold text-sm truncate">{userName}</p>
-              <p className="text-xs text-gray-400">{roleLabel[role] ?? role}{userTeam ? ` · ${userTeam}` : ""}</p>
+              <p className="text-xs text-gray-400">{displayRoleLabel}{!viewAs.role && userTeam ? ` · ${userTeam}` : ""}</p>
             </div>
           </div>
           <button onClick={() => setOpen(false)} className="p-1.5 rounded-lg hover:bg-gray-100">
@@ -144,7 +155,7 @@ export default function NavMenu({ role, userName, userImage, userTeam }: NavMenu
           {items.map((item) => (
             <button
               key={item.label}
-              onClick={() => { setOpen(false); item.onClick?.(); }}
+              onClick={() => { setOpen(false); setShowTeamPicker(false); item.onClick?.(); }}
               className={`w-full flex items-center justify-between px-5 py-3.5 text-left transition-colors ${
                 item.active
                   ? "bg-indigo-50 text-indigo-700 font-semibold"
@@ -160,10 +171,62 @@ export default function NavMenu({ role, userName, userImage, userTeam }: NavMenu
           ))}
         </nav>
 
+        {/* Admin 専用: 営業マン画面切り替え */}
+        {role === "Admin" && (
+          <div className="border-t px-4 py-3 space-y-2">
+            {viewAs.role === "Sales" ? (
+              <button
+                onClick={() => { clearViewAs(); setOpen(false); router.push("/admin"); }}
+                className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg bg-amber-50 text-amber-700 hover:bg-amber-100 transition-colors text-sm font-medium"
+              >
+                <RefreshCw className="w-4 h-4" />
+                管理者画面に戻る
+              </button>
+            ) : (
+              <>
+                {!showTeamPicker ? (
+                  <button
+                    onClick={() => setShowTeamPicker(true)}
+                    className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg bg-blue-50 text-blue-700 hover:bg-blue-100 transition-colors text-sm font-medium"
+                  >
+                    <RefreshCw className="w-4 h-4" />
+                    営業マン画面で見る
+                  </button>
+                ) : (
+                  <div className="space-y-1">
+                    <p className="text-xs text-gray-500 px-1">チームを選択</p>
+                    {TEAMS.map((team) => (
+                      <button
+                        key={team}
+                        onClick={() => {
+                          setViewAs("Sales", team);
+                          setShowTeamPicker(false);
+                          setOpen(false);
+                          router.push("/sales");
+                        }}
+                        className="w-full flex items-center justify-between px-3 py-2 rounded-lg bg-blue-50 text-blue-700 hover:bg-blue-100 transition-colors text-sm"
+                      >
+                        <span>{team}</span>
+                        <ChevronRight className="w-4 h-4" />
+                      </button>
+                    ))}
+                    <button
+                      onClick={() => setShowTeamPicker(false)}
+                      className="w-full text-xs text-gray-400 py-1 hover:text-gray-600"
+                    >
+                      キャンセル
+                    </button>
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        )}
+
         {/* ログアウト */}
         <div className="border-t p-3">
           <button
-            onClick={() => { setOpen(false); signOut({ callbackUrl: "/login" }); }}
+            onClick={() => { setOpen(false); clearViewAs(); signOut({ callbackUrl: "/login" }); }}
             className="w-full flex items-center gap-3 px-5 py-3 rounded-lg text-red-500 hover:bg-red-50 transition-colors"
           >
             <LogOut className="w-5 h-5" />

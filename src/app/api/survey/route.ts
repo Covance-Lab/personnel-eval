@@ -75,22 +75,65 @@ export async function GET(req: NextRequest) {
   }
 
   if (myRole === "Sales") {
-    // 同チームのAMを評価
-    const teamQuery = myTeam
+    // 同チームのAMを全員取得
+    const amQuery = myTeam
       ? supabaseAdmin.from("users").select("id, nickname, name").eq("role", "AM").eq("team", myTeam).eq("setup_completed", true)
       : supabaseAdmin.from("users").select("id, nickname, name").eq("role", "AM").eq("setup_completed", true);
+    const { data: ams } = await amQuery;
 
-    const { data: ams } = await teamQuery;
+    // AMごとにグループを構築
+    const groups: {
+      amId: string;
+      amName: string;
+      pages: { targetId: string; targetName: string; targetRole: string; type: string; submitted: boolean }[];
+      fullySubmitted: boolean;
+    }[] = [];
 
-    const pages = (ams ?? []).map((u) => ({
-      targetId:  u.id,
-      targetName: u.nickname ?? u.name ?? u.id,
-      type: "eval",
-      submitted: submittedMap.has(`${u.id}:eval`),
-    }));
+    for (const am of ams ?? []) {
+      const amName = am.nickname ?? am.name ?? am.id;
 
-    const fullySubmitted = pages.length > 0 && pages.every((p) => p.submitted);
-    return NextResponse.json({ role: "Sales", fullySubmitted, pages });
+      // このAMが管轄するアポインターを取得
+      const { data: appointers } = await supabaseAdmin
+        .from("users")
+        .select("id, nickname, name")
+        .eq("role", "Appointer")
+        .eq("education_mentor_user_id", am.id)
+        .eq("setup_completed", true);
+
+      const groupPages: typeof groups[0]["pages"] = [];
+
+      // アポインター評価ページ（AMグループの最初）
+      for (const ap of appointers ?? []) {
+        groupPages.push({
+          targetId:   ap.id,
+          targetName: ap.nickname ?? ap.name ?? ap.id,
+          targetRole: "Appointer",
+          type:       "eval",
+          submitted:  submittedMap.has(`${ap.id}:eval`),
+        });
+      }
+
+      // AMの評価ページ（グループの最後）
+      groupPages.push({
+        targetId:   am.id,
+        targetName: amName,
+        targetRole: "AM",
+        type:       "eval",
+        submitted:  submittedMap.has(`${am.id}:eval`),
+      });
+
+      groups.push({
+        amId:           am.id,
+        amName,
+        pages:          groupPages,
+        fullySubmitted: groupPages.length > 0 && groupPages.every((p) => p.submitted),
+      });
+    }
+
+    const fullySubmitted = groups.length > 0 && groups.every((g) => g.fullySubmitted);
+    // pages（フラット）はアンケートページ互換用
+    const pages = groups.flatMap((g) => g.pages);
+    return NextResponse.json({ role: "Sales", fullySubmitted, groups, pages });
   }
 
   // AM/Sales/Appointer以外（Admin等）はアンケート対象外

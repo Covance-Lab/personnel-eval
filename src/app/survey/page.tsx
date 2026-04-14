@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
-import { useRouter } from "next/navigation";
+import { Suspense, useEffect, useState, useCallback } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -12,6 +12,7 @@ import { getSurveyWindow } from "@/lib/surveySchedule";
 interface Page {
   targetId: string;
   targetName?: string;
+  targetRole?: string;
   type: "self" | "eval";
   submitted: boolean;
 }
@@ -112,22 +113,34 @@ const AM_SELF_QUESTIONS = [
   "業務改善（アポ獲得率を上げる）ために進んで行動できましたか？",
 ];
 
-const SALES_EVAL_QUESTIONS = [
+// 営業マンがアポインターを評価する設問
+const SALES_APPOINTER_EVAL_QUESTIONS = [
   "シート更新や日報を徹底してできていましたか？",
-  "あなたのアドバイスを、進んで実践できていましたか？",
+  "アポインターマネージャーからのアドバイスを、進んで実践できていましたか？",
+  "自らチームに成功事例や情報の共有をしていましたか？",
+  "業務改善（アポ獲得率を上げる）ために進んで行動していましたか？",
+];
+
+// 営業マンがAMを評価する設問
+const SALES_AM_EVAL_QUESTIONS = [
+  "シート更新や日報を徹底してできていましたか？",
+  "アポインターへのアドバイスを積極的に行い、チームを牽引できていましたか？",
   "自らチームに成功事例や情報の共有をしていましたか？",
   "業務改善（アポ獲得率を上げる・成約率を上げる）ために進んで行動していましたか？",
 ];
 
-function getQuestions(role: string, type: "self" | "eval"): string[] {
+function getQuestions(role: string, type: "self" | "eval", targetRole?: string): string[] {
   if (role === "Appointer") return APPOINTER_QUESTIONS;
   if (role === "AM" && type === "eval")  return AM_EVAL_QUESTIONS;
   if (role === "AM" && type === "self")  return AM_SELF_QUESTIONS;
-  if (role === "Sales") return SALES_EVAL_QUESTIONS;
+  if (role === "Sales") {
+    if (targetRole === "Appointer") return SALES_APPOINTER_EVAL_QUESTIONS;
+    return SALES_AM_EVAL_QUESTIONS; // AM or unspecified
+  }
   return AM_EVAL_QUESTIONS;
 }
 
-function getIntro(role: string, type: "self" | "eval", targetName?: string): { title: string; body: string } {
+function getIntro(role: string, type: "self" | "eval", targetName?: string, targetRole?: string): { title: string; body: string } {
   if (role === "Appointer") return {
     title: "月次アンケート",
     body: "日々のアポインター業務ありがとうございます！\n一緒に事業を盛り上げていけるように、月2回アンケートを取っています！\nご協力よろしくお願いします😌\n（所要時間4分）",
@@ -140,6 +153,10 @@ function getIntro(role: string, type: "self" | "eval", targetName?: string): { t
     title: "〜自己評価アンケート〜",
     body: "ここからは自分自身に関してのアンケートになります！\n1ヶ月の動きに対して振り返る機会にしてみてください！\n（所要時間4分）",
   };
+  if (role === "Sales" && targetRole === "Appointer") return {
+    title: `〜アポインター評価〜 ${targetName ?? ""}`,
+    body: "日々の業務ありがとうございます！\n一緒に事業を盛り上げていけるように、1人1人のアポインターさんに関してアンケートを取っています。\nご協力よろしくお願いします😌\n（所要時間4分）",
+  };
   if (role === "Sales") return {
     title: `〜AM評価アンケート〜 ${targetName ?? ""}`,
     body: "日々の業務ありがとうございます！\n一緒に事業を盛り上げていけるように、1人1人のアポインターマネージャーさんに関してアンケートを取っています。\nご協力よろしくお願いします😌\n（所要時間4分）",
@@ -147,14 +164,16 @@ function getIntro(role: string, type: "self" | "eval", targetName?: string): { t
   return { title: "アンケート", body: "" };
 }
 
-// ─── メインページ ──────────────────────────────────────────────────
-export default function SurveyPage() {
+// ─── メインコンテンツ（useSearchParams使用） ───────────────────────
+function SurveyContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const amId = searchParams.get("amId"); // 営業マン向け: 特定AMグループのみ
   const { data: session, status } = useSession();
 
-  const [pages, setPages]         = useState<Page[]>([]);
-  const [pageIndex, setPageIndex] = useState(0);
-  const [answers, setAnswers]     = useState<QuestionAnswer[]>([EMPTY_ANSWER, EMPTY_ANSWER, EMPTY_ANSWER, EMPTY_ANSWER]);
+  const [pages, setPages]           = useState<Page[]>([]);
+  const [pageIndex, setPageIndex]   = useState(0);
+  const [answers, setAnswers]       = useState<QuestionAnswer[]>([EMPTY_ANSWER, EMPTY_ANSWER, EMPTY_ANSWER, EMPTY_ANSWER]);
   const [submitting, setSubmitting] = useState(false);
   const [loading, setLoading]       = useState(true);
 
@@ -170,13 +189,27 @@ export default function SurveyPage() {
     const res = await fetch(`/api/survey?year=${year}&month=${month}`);
     if (!res.ok) { setLoading(false); return; }
     const d = await res.json();
-    setPages(d.pages ?? []);
-    // 最初の未提出ページへ
-    const firstUnsubmitted = (d.pages ?? []).findIndex((p: Page) => !p.submitted);
+
+    let targetPages: Page[] = [];
+
+    if (amId && d.groups) {
+      // 営業マン: 特定AMグループのページのみ
+      const group = (d.groups as { amId: string; pages: Page[] }[]).find((g) => g.amId === amId);
+      targetPages = group?.pages ?? [];
+    } else {
+      targetPages = d.pages ?? [];
+    }
+
+    setPages(targetPages);
+    const firstUnsubmitted = targetPages.findIndex((p: Page) => !p.submitted);
     if (firstUnsubmitted >= 0) setPageIndex(firstUnsubmitted);
-    else if (d.fullySubmitted) { router.replace("/survey/done"); return; }
+    else if (d.fullySubmitted || (amId && targetPages.every((p: Page) => p.submitted))) {
+      router.replace("/survey/done");
+      return;
+    }
     setLoading(false);
-  }, [status, win.year, win.month]); // eslint-disable-line react-hooks/exhaustive-deps
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [status, win.year, win.month, amId]);
 
   useEffect(() => { loadStatus(); }, [loadStatus]);
 
@@ -189,7 +222,6 @@ export default function SurveyPage() {
     return <div className="min-h-screen bg-gray-50 flex items-center justify-center"><p>読み込み中...</p></div>;
   }
 
-  // 回答期間外 (APIがinactive=trueを返した場合)
   if (pages.length === 0) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
@@ -208,11 +240,11 @@ export default function SurveyPage() {
     return <div className="min-h-screen bg-gray-50 flex items-center justify-center"><p>ページがありません</p></div>;
   }
 
-  const questions = getQuestions(role, currentPage.type);
-  const intro = getIntro(role, currentPage.type, currentPage.targetName);
+  const questions  = getQuestions(role, currentPage.type, currentPage.targetRole);
+  const intro      = getIntro(role, currentPage.type, currentPage.targetName, currentPage.targetRole);
   const showReason = role === "Appointer";
   const allAnswered = answers.every((a) => a.score !== null);
-  const isLastPage = pageIndex === pages.length - 1;
+  const isLastPage  = pageIndex === pages.length - 1;
 
   async function handleSubmit() {
     if (!allAnswered || submitting) return;
@@ -240,7 +272,6 @@ export default function SurveyPage() {
     if (isLastPage) {
       router.replace("/survey/done");
     } else {
-      // 次のページへ
       setPages((prev) => prev.map((p, i) => i === pageIndex ? { ...p, submitted: true } : p));
       setPageIndex((i) => i + 1);
       setSubmitting(false);
@@ -321,5 +352,14 @@ export default function SurveyPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+// ─── Suspense ラッパー（useSearchParams 必須） ──────────────────────
+export default function SurveyPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-gray-50 flex items-center justify-center"><p>読み込み中...</p></div>}>
+      <SurveyContent />
+    </Suspense>
   );
 }

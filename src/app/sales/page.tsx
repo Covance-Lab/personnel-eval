@@ -8,6 +8,7 @@ import { TrendingUp, TrendingDown, Minus } from "lucide-react";
 import PageLayout from "@/components/layout/PageLayout";
 import SurveyNotice from "@/components/survey/SurveyNotice";
 import TeamEvaluationList from "@/components/evaluation/TeamEvaluationList";
+import { useViewAs } from "@/contexts/ViewAsContext";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
   Legend, ResponsiveContainer, LineChart, Line,
@@ -50,6 +51,7 @@ function StatBox({ label, curr, prev, suffix = "" }: { label: string; curr: numb
 export default function SalesPage() {
   const router = useRouter();
   const { data: session, status } = useSession();
+  const { viewAs } = useViewAs();
 
   const [teamRecords, setTeamRecords] = useState<MonthRecord[]>([]);
   const [aggregates, setAggregates]   = useState<AggregateRecord[]>([]);
@@ -57,12 +59,20 @@ export default function SalesPage() {
 
   useEffect(() => {
     if (status === "unauthenticated") router.replace("/login");
-    if (status === "authenticated" && session?.user?.role !== "Sales") router.replace("/dashboard");
-  }, [status, session, router]);
+    if (status === "authenticated") {
+      const role = session?.user?.role;
+      const isAdmin = role === "Admin";
+      const isViewAsSales = isAdmin && viewAs.role === "Sales";
+      if (role !== "Sales" && !isViewAsSales) router.replace("/dashboard");
+    }
+  }, [status, session, router, viewAs]);
 
   const loadData = useCallback(async () => {
     if (status !== "authenticated") return;
-    const team = session?.user?.team;
+    // Admin が「営業マン画面で見る」場合は viewAs.team を使用
+    const team = (session?.user?.role === "Admin" && viewAs.role === "Sales")
+      ? viewAs.team
+      : session?.user?.team;
     if (!team) { setLoading(false); return; }
 
     try {
@@ -88,7 +98,7 @@ export default function SalesPage() {
     } finally {
       setLoading(false);
     }
-  }, [status, session]);
+  }, [status, session, viewAs]);
 
   useEffect(() => { loadData(); }, [loadData]);
 
@@ -96,7 +106,9 @@ export default function SalesPage() {
     return <div className="min-h-screen bg-gray-50 flex items-center justify-center"><p>読み込み中...</p></div>;
   }
 
-  const { nickname, name, image, role, team } = session?.user ?? {};
+  const { nickname, name, image, role } = session?.user ?? {};
+  // Admin が viewAs Sales の場合は viewAs.team を使用
+  const team = (role === "Admin" && viewAs.role === "Sales") ? viewAs.team : session?.user?.team;
   const userName = nickname ?? name ?? "営業マン";
 
   const now = new Date();
@@ -127,8 +139,10 @@ export default function SalesPage() {
 
   const myDbId = session?.user?.dbId ?? "";
 
+  const effectiveRole = (role === "Admin" && viewAs.role === "Sales") ? "Sales" : (role ?? "Sales");
+
   return (
-    <PageLayout title="チーム実績" role={role ?? "Sales"} userName={userName} userImage={image} userTeam={team}>
+    <PageLayout title="チーム実績" role={effectiveRole as "Sales"} userName={userName} userImage={image} userTeam={team ?? undefined}>
       <div className="space-y-6">
 
         {/* アンケート通知 */}
