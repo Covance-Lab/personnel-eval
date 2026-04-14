@@ -838,6 +838,20 @@ function TestUserManager() {
 interface SurveyStatusUser {
   id: string; name: string; role: string; team?: string;
   required: number; submitted: number; fullySubmitted: boolean;
+  detail?: string;
+}
+
+interface SurveyAnswer {
+  id: string;
+  year: number; month: number;
+  survey_type: "self" | "eval";
+  q1_score: number | null; q1_reason: string | null;
+  q2_score: number | null; q2_reason: string | null;
+  q3_score: number | null; q3_reason: string | null;
+  q4_score: number | null; q4_reason: string | null;
+  submitted_at: string;
+  respondent: { id: string; nickname?: string; name?: string; role: string; team?: string } | null;
+  target:     { id: string; nickname?: string; name?: string; role: string; team?: string } | null;
 }
 
 interface EvalResult {
@@ -848,31 +862,53 @@ interface EvalResult {
   contribution_self: number | null; thinking_self: number | null;
   discipline_other: number | null; absorption_other: number | null;
   contribution_other: number | null; thinking_other: number | null;
+  all_responded: boolean;
   visible_to_user: boolean;
   users?: { nickname?: string; name?: string; role: string; team?: string };
 }
+
+const ROLE_LABELS: Record<string, string> = {
+  Appointer: "アポインター", AM: "AM", Sales: "営業マン", Admin: "管理者",
+};
+const Q_LABELS = ["規律", "吸収力", "組織貢献", "思考力"];
 
 function EvaluationSection() {
   const now = new Date();
   const [selYear, setSelYear]   = useState(String(now.getFullYear()));
   const [selMonth, setSelMonth] = useState(String(now.getMonth() + 1));
 
+  // ── 提出状況 ──
   const [statusUsers, setStatusUsers]     = useState<SurveyStatusUser[]>([]);
   const [statusLoading, setStatusLoading] = useState(false);
   const [statusLoaded, setStatusLoaded]   = useState(false);
 
+  // ── 回答内容 ──
+  const [answers, setAnswers]           = useState<SurveyAnswer[]>([]);
+  const [answersLoading, setAnswersLoading] = useState(false);
+  const [answersLoaded, setAnswersLoaded]   = useState(false);
+  const [expandedAnswer, setExpandedAnswer] = useState<string | null>(null);
+
+  // ── 算出結果 ──
   const [calcLoading, setCalcLoading] = useState(false);
   const [calcMsg, setCalcMsg]         = useState<{ ok: boolean; msg: string } | null>(null);
-
-  const [results, setResults]       = useState<EvalResult[]>([]);
+  const [results, setResults]           = useState<EvalResult[]>([]);
   const [resultsLoading, setResultsLoading] = useState(false);
   const [resultsLoaded, setResultsLoaded]   = useState(false);
+  const [publishLoading, setPublishLoading] = useState(false);
+  const [publishMsg, setPublishMsg]         = useState<{ ok: boolean; msg: string } | null>(null);
 
   async function loadStatus() {
     setStatusLoading(true);
     const r = await fetch(`/api/admin/survey-status?year=${selYear}&month=${selMonth}`);
     if (r.ok) { const d = await r.json(); setStatusUsers(d.users ?? []); setStatusLoaded(true); }
     setStatusLoading(false);
+  }
+
+  async function loadAnswers() {
+    setAnswersLoading(true);
+    const r = await fetch(`/api/admin/survey-answers?year=${selYear}&month=${selMonth}`);
+    if (r.ok) { const d = await r.json(); setAnswers(d.answers ?? []); setAnswersLoaded(true); }
+    setAnswersLoading(false);
   }
 
   async function loadResults() {
@@ -896,6 +932,24 @@ function EvaluationSection() {
     setCalcLoading(false);
   }
 
+  async function handlePublishAll() {
+    if (!confirm(`${selYear}年${selMonth}月の評価結果を全員に配信しますか？\n各自の人事評価画面に表示されます。`)) return;
+    setPublishLoading(true); setPublishMsg(null);
+    const r = await fetch("/api/admin/evaluate", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ year: parseInt(selYear), month: parseInt(selMonth), publishAll: true }),
+    });
+    const d = await r.json();
+    if (r.ok && d.ok) {
+      setPublishMsg({ ok: true, msg: "全員に配信しました" });
+      setResults((prev) => prev.map((r) => ({ ...r, visible_to_user: true })));
+    } else {
+      setPublishMsg({ ok: false, msg: d.error ?? "配信に失敗しました" });
+    }
+    setPublishLoading(false);
+  }
+
   async function toggleVisible(userId: string, current: boolean) {
     await fetch("/api/admin/evaluate", {
       method: "PATCH",
@@ -907,6 +961,14 @@ function EvaluationSection() {
 
   const doneCount = statusUsers.filter((u) => u.fullySubmitted).length;
 
+  // 回答内容をターゲットごとにグループ化
+  const answersByTarget = new Map<string, SurveyAnswer[]>();
+  for (const a of answers) {
+    const key = `${a.target?.id ?? "?"}_${a.survey_type}`;
+    if (!answersByTarget.has(key)) answersByTarget.set(key, []);
+    answersByTarget.get(key)!.push(a);
+  }
+
   return (
     <Card className="border-l-4 border-l-purple-400">
       <CardHeader className="pb-3">
@@ -915,10 +977,10 @@ function EvaluationSection() {
         </CardTitle>
         <p className="text-xs text-gray-500">アンケート締切後、提出状況を確認してから評価を算出します。</p>
       </CardHeader>
-      <CardContent className="space-y-4">
+      <CardContent className="space-y-5">
 
         {/* 年月セレクタ */}
-        <div className="flex gap-2 items-center">
+        <div className="flex flex-wrap gap-2 items-center">
           <select value={selYear} onChange={(e) => setSelYear(e.target.value)} className="h-9 rounded border bg-white px-2 text-xs w-24">
             {Array.from({ length: 3 }, (_, i) => now.getFullYear() - i).map((y) => (
               <option key={y} value={y}>{y}年</option>
@@ -935,7 +997,7 @@ function EvaluationSection() {
           </Button>
         </div>
 
-        {/* 提出状況テーブル */}
+        {/* ① 提出状況テーブル（Appointer / AM / Sales 全員） */}
         {statusLoaded && (
           <div className="space-y-2">
             <div className="flex items-center gap-2">
@@ -953,14 +1015,15 @@ function EvaluationSection() {
                     <th className="text-left px-3 py-2 font-medium text-gray-600">名前</th>
                     <th className="text-left px-3 py-2 font-medium text-gray-600">ロール</th>
                     <th className="text-left px-3 py-2 font-medium text-gray-600">チーム</th>
-                    <th className="text-center px-3 py-2 font-medium text-gray-600">提出状況</th>
+                    <th className="text-center px-3 py-2 font-medium text-gray-600">提出</th>
+                    <th className="text-left px-3 py-2 font-medium text-gray-600">詳細</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y">
                   {statusUsers.map((u) => (
                     <tr key={u.id} className={u.fullySubmitted ? "bg-white" : "bg-red-50"}>
                       <td className="px-3 py-2 font-medium">{u.name}</td>
-                      <td className="px-3 py-2 text-gray-500">{u.role}</td>
+                      <td className="px-3 py-2 text-gray-500">{ROLE_LABELS[u.role] ?? u.role}</td>
                       <td className="px-3 py-2 text-gray-500">{u.team ?? "—"}</td>
                       <td className="px-3 py-2 text-center">
                         {u.fullySubmitted ? (
@@ -973,6 +1036,7 @@ function EvaluationSection() {
                           </span>
                         )}
                       </td>
+                      <td className="px-3 py-2 text-gray-400 text-xs">{u.detail ?? ""}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -981,21 +1045,91 @@ function EvaluationSection() {
           </div>
         )}
 
-        {/* 評価算出ボタン */}
-        <div className="border-t pt-3 space-y-2">
-          <p className="text-xs font-medium text-gray-700">評価を算出する</p>
-          <p className="text-xs text-gray-400">
-            ・定量評価（稼働量・成果）は前月の実績データを使用します<br />
-            ・定性評価（規律・吸収力・組織貢献・思考力）は今月のアンケート回答を使用します
-          </p>
+        {/* ② アンケートの回答内容 */}
+        <div className="border-t pt-4 space-y-3">
           <div className="flex items-center gap-3">
+            <p className="text-xs font-semibold text-gray-700">アンケートの回答内容</p>
+            <Button size="sm" variant="outline" onClick={loadAnswers} disabled={answersLoading} className="gap-1.5">
+              <Eye className="w-3.5 h-3.5" />
+              {answersLoading ? "取得中..." : "回答を表示"}
+            </Button>
+          </div>
+
+          {answersLoaded && (
+            <div className="space-y-2">
+              {answers.length === 0 ? (
+                <p className="text-xs text-gray-400 text-center py-3">回答がまだありません</p>
+              ) : (
+                <div className="rounded-lg border overflow-hidden divide-y text-xs">
+                  {Array.from(answersByTarget.entries()).map(([key, group]) => {
+                    const first = group[0];
+                    const targetName = first.target?.nickname ?? first.target?.name ?? first.target?.id ?? "—";
+                    const targetRole = first.target?.role ? (ROLE_LABELS[first.target.role] ?? first.target.role) : "";
+                    const typeLabel  = first.survey_type === "self" ? "自己評価" : "他者評価";
+                    const isOpen     = expandedAnswer === key;
+                    return (
+                      <div key={key} className="bg-white">
+                        <button
+                          className="w-full flex items-center justify-between px-3 py-2.5 text-left hover:bg-gray-50"
+                          onClick={() => setExpandedAnswer(isOpen ? null : key)}
+                        >
+                          <span className="flex items-center gap-2">
+                            <span className="font-medium text-gray-800">{targetName}</span>
+                            <span className="text-gray-400">{targetRole}</span>
+                            <span className={`px-1.5 py-0.5 rounded text-xs font-medium ${first.survey_type === "self" ? "bg-indigo-100 text-indigo-700" : "bg-pink-100 text-pink-700"}`}>{typeLabel}</span>
+                            <span className="text-gray-400">{group.length}名回答</span>
+                          </span>
+                          {isOpen ? <ChevronUp className="w-4 h-4 text-gray-400" /> : <ChevronDown className="w-4 h-4 text-gray-400" />}
+                        </button>
+                        {isOpen && (
+                          <div className="px-3 pb-3 space-y-3">
+                            {group.map((ans) => {
+                              const respName = ans.respondent?.nickname ?? ans.respondent?.name ?? "—";
+                              const respRole = ans.respondent?.role ? (ROLE_LABELS[ans.respondent.role] ?? ans.respondent.role) : "";
+                              return (
+                                <div key={ans.id} className="bg-gray-50 rounded-lg p-3 space-y-2">
+                                  <p className="font-medium text-gray-700">{respName} <span className="text-gray-400 font-normal">({respRole})</span></p>
+                                  {[0, 1, 2, 3].map((qi) => {
+                                    const score  = [ans.q1_score, ans.q2_score, ans.q3_score, ans.q4_score][qi];
+                                    const reason = [ans.q1_reason, ans.q2_reason, ans.q3_reason, ans.q4_reason][qi];
+                                    return (
+                                      <div key={qi} className="flex gap-2">
+                                        <span className="text-gray-500 w-16 shrink-0">Q{qi + 1}. {Q_LABELS[qi]}</span>
+                                        <span className="font-bold text-indigo-600">{score != null ? `${score}点` : "未回答"}</span>
+                                        {reason && <span className="text-gray-500 flex-1">{reason}</span>}
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* ③ 評価算出 + 結果配信 */}
+        <div className="border-t pt-4 space-y-3">
+          <p className="text-xs font-semibold text-gray-700">評価を算出する</p>
+          <p className="text-xs text-gray-400 space-y-0.5">
+            ・定量評価（稼働量・成果）は前月の実績データを使用します<br />
+            ・定性評価（規律・吸収力・組織貢献・思考力）は今月のアンケート回答を使用します<br />
+            ・アポインター本人・AM・営業マンの3者全員が回答済みの場合のみ算出します（未回答は全項目0点）
+          </p>
+          <div className="flex flex-wrap items-center gap-2">
             <Button onClick={handleCalculate} disabled={calcLoading} className="gap-1.5 bg-purple-600 hover:bg-purple-700">
               <Play className="w-3.5 h-3.5" />
               {calcLoading ? "算出中..." : "結果算出スタート"}
             </Button>
             <Button size="sm" variant="outline" onClick={loadResults} disabled={resultsLoading} className="gap-1.5">
               <RefreshCw className={`w-3.5 h-3.5 ${resultsLoading ? "animate-spin" : ""}`} />
-              結果を表示
+              結果を確認
             </Button>
           </div>
           {calcMsg && (
@@ -1006,13 +1140,31 @@ function EvaluationSection() {
           )}
         </div>
 
-        {/* 算出結果一覧 + 表示切替 */}
+        {/* 算出結果一覧 */}
         {resultsLoaded && (
-          <div className="space-y-2">
-            <p className="text-xs font-medium text-gray-700">
-              算出結果（{results.length}名）
-              <span className="ml-2 font-normal text-gray-400">— 目のアイコンで個人への表示/非表示を切替</span>
-            </p>
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <p className="text-xs font-medium text-gray-700">
+                算出結果（{results.length}名）
+              </p>
+              {results.length > 0 && (
+                <Button
+                  size="sm"
+                  onClick={handlePublishAll}
+                  disabled={publishLoading}
+                  className="gap-1.5 bg-green-600 hover:bg-green-700 text-white"
+                >
+                  <Eye className="w-3.5 h-3.5" />
+                  {publishLoading ? "配信中..." : "結果を配信（全員）"}
+                </Button>
+              )}
+            </div>
+            {publishMsg && (
+              <div className={`flex items-center gap-1.5 rounded px-3 py-2 text-xs ${publishMsg.ok ? "bg-green-50 text-green-700" : "bg-red-50 text-red-700"}`}>
+                {publishMsg.ok ? <CheckCircle2 className="w-3.5 h-3.5" /> : <AlertCircle className="w-3.5 h-3.5" />}
+                {publishMsg.msg}
+              </div>
+            )}
             {results.length === 0 ? (
               <p className="text-xs text-gray-400 text-center py-3">まだ算出されていません</p>
             ) : (
@@ -1021,33 +1173,37 @@ function EvaluationSection() {
                   <thead className="bg-gray-50">
                     <tr>
                       <th className="text-left px-3 py-2 font-medium text-gray-600">名前</th>
+                      <th className="text-center px-2 py-2 font-medium text-gray-600">3者回答</th>
                       <th className="text-center px-2 py-2 font-medium text-gray-600">稼働量</th>
                       <th className="text-center px-2 py-2 font-medium text-gray-600">成果</th>
-                      <th className="text-center px-2 py-2 font-medium text-gray-600">規律</th>
-                      <th className="text-center px-2 py-2 font-medium text-gray-600">吸収力</th>
-                      <th className="text-center px-2 py-2 font-medium text-gray-600">組織貢献</th>
-                      <th className="text-center px-2 py-2 font-medium text-gray-600">思考力</th>
-                      <th className="text-center px-2 py-2 font-medium text-gray-600">表示</th>
+                      <th className="text-center px-2 py-2 font-medium text-gray-600">規律<br/><span className="font-normal text-gray-400">自/他</span></th>
+                      <th className="text-center px-2 py-2 font-medium text-gray-600">吸収力<br/><span className="font-normal text-gray-400">自/他</span></th>
+                      <th className="text-center px-2 py-2 font-medium text-gray-600">組織貢献<br/><span className="font-normal text-gray-400">自/他</span></th>
+                      <th className="text-center px-2 py-2 font-medium text-gray-600">思考力<br/><span className="font-normal text-gray-400">自/他</span></th>
+                      <th className="text-center px-2 py-2 font-medium text-gray-600">配信</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y">
                     {results.map((r) => {
                       const uName = r.users?.nickname ?? r.users?.name ?? r.user_id;
                       return (
-                        <tr key={r.user_id} className="hover:bg-gray-50">
+                        <tr key={r.user_id} className={`hover:bg-gray-50 ${!r.all_responded ? "bg-orange-50" : ""}`}>
                           <td className="px-3 py-2">
                             <p className="font-medium">{uName}</p>
-                            <p className="text-gray-400">{r.users?.role} · {r.users?.team ?? "—"}</p>
+                            <p className="text-gray-400">{ROLE_LABELS[r.users?.role ?? ""] ?? r.users?.role} · {r.users?.team ?? "—"}</p>
                           </td>
                           <td className="px-2 py-2 text-center">
-                            {r.workload_score != null ? (
-                              <ScorePill score={r.workload_score} />
-                            ) : <span className="text-gray-300">—</span>}
+                            {r.all_responded ? (
+                              <span className="text-green-600 font-semibold">✓</span>
+                            ) : (
+                              <span className="text-orange-500 font-semibold">未完了</span>
+                            )}
                           </td>
                           <td className="px-2 py-2 text-center">
-                            {r.performance_score != null ? (
-                              <ScorePill score={r.performance_score} />
-                            ) : <span className="text-gray-300">—</span>}
+                            {r.workload_score != null ? <ScorePill score={r.workload_score} /> : <span className="text-gray-300">—</span>}
+                          </td>
+                          <td className="px-2 py-2 text-center">
+                            {r.performance_score != null ? <ScorePill score={r.performance_score} /> : <span className="text-gray-300">—</span>}
                           </td>
                           {(["discipline", "absorption", "contribution", "thinking"] as const).map((k) => (
                             <td key={k} className="px-2 py-2 text-center">
@@ -1066,7 +1222,7 @@ function EvaluationSection() {
                             <button
                               onClick={() => toggleVisible(r.user_id, r.visible_to_user)}
                               className={`p-1.5 rounded-full transition-colors ${r.visible_to_user ? "bg-green-100 text-green-700 hover:bg-green-200" : "bg-gray-100 text-gray-400 hover:bg-gray-200"}`}
-                              title={r.visible_to_user ? "表示中（クリックで非表示に）" : "非表示（クリックで表示に）"}
+                              title={r.visible_to_user ? "配信中（クリックで非表示に）" : "未配信（クリックで配信）"}
                             >
                               {r.visible_to_user ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
                             </button>
@@ -1081,6 +1237,7 @@ function EvaluationSection() {
             <p className="text-xs text-gray-400">
               <span className="text-indigo-600 font-semibold">青</span>= 自己評価
               <span className="text-pink-600 font-semibold">ピンク</span>= 他者評価（平均）
+              <span className="text-orange-500 font-semibold">橙背景</span>= 3者未回答（全て0点）
             </p>
           </div>
         )}

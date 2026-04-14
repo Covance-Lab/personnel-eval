@@ -103,20 +103,38 @@ export async function POST(req: NextRequest) {
     .eq("year", year)
     .eq("month", month);
 
-  // 今月のアンケート回答（他者評価 = 誰かがこのユーザーを評価したもの）
+  // 今月のアンケート回答（他者評価）
   const { data: evalAnswers } = await supabaseAdmin
     .from("survey_answers")
-    .select("respondent_id, target_id, q1_score, q2_score, q3_score, q4_score")
+    .select("respondent_id, target_id, q1_score, q2_score, q3_score, q4_score, respondent_role:respondent_id(role, team)")
     .in("target_id", userIds)
     .eq("survey_type", "eval")
     .eq("year", year)
     .eq("month", month);
 
-  // target_id → 評価回答リスト
-  const evalByTarget = new Map<string, typeof evalAnswers>();
+  // 評価者のロール情報を取得（AMか営業マンか判別するため）
+  const respondentIds = [...new Set((evalAnswers ?? []).map((a) => a.respondent_id))];
+  const { data: respondentUsers } = respondentIds.length > 0
+    ? await supabaseAdmin.from("users").select("id, role, team").in("id", respondentIds)
+    : { data: [] };
+  const respondentRoleMap = new Map((respondentUsers ?? []).map((u) => [u.id, { role: u.role as string, team: u.team as string | null }]));
+
+  // target_id → 評価回答リスト（全体 / AMのみ / Salesのみ）
+  const evalByTarget    = new Map<string, typeof evalAnswers>();
+  const evalAMByTarget  = new Map<string, typeof evalAnswers>();
+  const evalSalesByTarget = new Map<string, typeof evalAnswers>();
   for (const a of evalAnswers ?? []) {
-    if (!evalByTarget.has(a.target_id)) evalByTarget.set(a.target_id, []);
+    const resp = respondentRoleMap.get(a.respondent_id);
+    if (!evalByTarget.has(a.target_id))     evalByTarget.set(a.target_id, []);
     evalByTarget.get(a.target_id)!.push(a);
+    if (resp?.role === "AM") {
+      if (!evalAMByTarget.has(a.target_id)) evalAMByTarget.set(a.target_id, []);
+      evalAMByTarget.get(a.target_id)!.push(a);
+    }
+    if (resp?.role === "Sales") {
+      if (!evalSalesByTarget.has(a.target_id)) evalSalesByTarget.set(a.target_id, []);
+      evalSalesByTarget.get(a.target_id)!.push(a);
+    }
   }
 
   // 自己評価マップ (respondent_id → 回答)
@@ -125,28 +143,45 @@ export async function POST(req: NextRequest) {
   );
 
   const rows = users.map((u) => {
-    const perf = perfMap.get(u.id);
-    const self = selfMap.get(u.id);
+    const perf  = perfMap.get(u.id);
+    const self  = selfMap.get(u.id);
     const evals = evalByTarget.get(u.id) ?? [];
+    const amEvals    = evalAMByTarget.get(u.id)    ?? [];
+    const salesEvals = evalSalesByTarget.get(u.id) ?? [];
 
-    // 定量スコア（Appointerのみ。データなし → 1点デフォルト）
+    // ─── 3者回答チェック ───────────────────────────────────
+    // Appointer: 本人(self) + AM(eval) + 営業マン(eval) 全員必要
+    // AM:        本人(self) + 営業マン(eval) が必要
+    const hasSelf  = !!self;
+    const hasAMEval    = amEvals.length > 0;
+    const hasSalesEval = salesEvals.length > 0;
+
+    const allRespondentsReady = u.role === "Appointer"
+      ? hasSelf && hasAMEval && hasSalesEval
+      : u.role === "AM"
+      ? hasSelf && hasSalesEval
+      : true;
+
+    // ─── 定量スコア（Appointerのみ） ───────────────────────
     const dmCount    = perf?.dm_count    ?? null;
-    const appoCount  = perf?.appo_count  ?? null;
     const bSetRate   = perf?.appointment_rate != null ? Number(perf.appointment_rate) : null;
-    const workloadScore   = u.role === "Appointer" ? (dmCount   != null ? calcWorkload(dmCount)     : 1) : null;
-    const performanceScore = u.role === "Appointer" ? (bSetRate != null ? calcPerformance(bSetRate) : 1) : null;
+    const workloadScore   = u.role === "Appointer"
+      ? (allRespondentsReady ? (dmCount   != null ? calcWorkload(dmCount)     : 1) : 0)
+      : null;
+    const performanceScore = u.role === "Appointer"
+      ? (allRespondentsReady ? (bSetRate != null ? calcPerformance(bSetRate) : 1) : 0)
+      : null;
 
-    // 自己評価スコア
-    const disciplineSelf   = self?.q1_score ?? null;
-    const absorptionSelf   = self?.q2_score ?? null;
-    const contributionSelf = self?.q3_score ?? null;
-    const thinkingSelf     = self?.q4_score ?? null;
+    // ─── 定性スコア ─────────────────────────────────────────
+    const disciplineSelf   = allRespondentsReady ? (self?.q1_score ?? null) : 0;
+    const absorptionSelf   = allRespondentsReady ? (self?.q2_score ?? null) : 0;
+    const contributionSelf = allRespondentsReady ? (self?.q3_score ?? null) : 0;
+    const thinkingSelf     = allRespondentsReady ? (self?.q4_score ?? null) : 0;
 
-    // 他者評価スコア（平均）
-    const disciplineOther   = avg(evals.map((e) => e.q1_score));
-    const absorptionOther   = avg(evals.map((e) => e.q2_score));
-    const contributionOther = avg(evals.map((e) => e.q3_score));
-    const thinkingOther     = avg(evals.map((e) => e.q4_score));
+    const disciplineOther   = allRespondentsReady ? avg(evals.map((e) => e.q1_score)) : 0;
+    const absorptionOther   = allRespondentsReady ? avg(evals.map((e) => e.q2_score)) : 0;
+    const contributionOther = allRespondentsReady ? avg(evals.map((e) => e.q3_score)) : 0;
+    const thinkingOther     = allRespondentsReady ? avg(evals.map((e) => e.q4_score)) : 0;
 
     return {
       year, month,
@@ -163,6 +198,7 @@ export async function POST(req: NextRequest) {
       absorption_other:   absorptionOther,
       contribution_other: contributionOther,
       thinking_other:     thinkingOther,
+      all_responded:      allRespondentsReady,
       visible_to_user:    false,
       calculated_at:      new Date().toISOString(),
     };
@@ -177,17 +213,33 @@ export async function POST(req: NextRequest) {
   return NextResponse.json({ ok: true, count: rows.length });
 }
 
-// ─── PATCH: 表示/非表示切替 ────────────────────────────────────────────────
+// ─── PATCH: 表示/非表示切替（個別 or 一括配信） ────────────────────────────
 export async function PATCH(req: NextRequest) {
   const session = await auth();
   if (!session?.user?.dbId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   if (session.user.role !== "Admin") return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const body = await req.json();
-  const { year, month, userId, visibleToUser } = body;
+  const { year, month, userId, visibleToUser, publishAll } = body;
 
-  if (!year || !month || !userId || visibleToUser === undefined) {
-    return NextResponse.json({ error: "必須パラメータが不足しています" }, { status: 400 });
+  if (!year || !month) {
+    return NextResponse.json({ error: "year と month は必須です" }, { status: 400 });
+  }
+
+  // 一括配信モード
+  if (publishAll === true) {
+    const { error } = await supabaseAdmin
+      .from("evaluation_results")
+      .update({ visible_to_user: true })
+      .eq("year", year)
+      .eq("month", month);
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ ok: true, publishAll: true });
+  }
+
+  // 個別切替
+  if (!userId || visibleToUser === undefined) {
+    return NextResponse.json({ error: "userId と visibleToUser が必要です" }, { status: 400 });
   }
 
   const { error } = await supabaseAdmin

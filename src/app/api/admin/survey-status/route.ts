@@ -1,6 +1,7 @@
 /**
  * GET /api/admin/survey-status?year=&month=
  * アンケート提出状況を全ユーザー分返す（Admin専用）
+ * Appointer / AM / Sales 全員対象
  */
 
 import { NextRequest, NextResponse } from "next/server";
@@ -17,11 +18,11 @@ export async function GET(req: NextRequest) {
   const year  = parseInt(searchParams.get("year")  ?? String(now.getFullYear()));
   const month = parseInt(searchParams.get("month") ?? String(now.getMonth() + 1));
 
-  // Appointer + AM 全員取得
+  // Appointer + AM + Sales 全員取得
   const { data: users } = await supabaseAdmin
     .from("users")
     .select("id, nickname, name, role, team, education_mentor_user_id")
-    .in("role", ["Appointer", "AM"])
+    .in("role", ["Appointer", "AM", "Sales"])
     .eq("setup_completed", true)
     .order("role")
     .order("team");
@@ -44,41 +45,46 @@ export async function GET(req: NextRequest) {
     submittedMap.get(s.respondent_id)!.add(`${s.target_id}:${s.survey_type}`);
   }
 
-  // 各ユーザーの「必要ページ数」と「提出済みページ数」を計算
   const result = await Promise.all(
     (users ?? []).map(async (u) => {
       const done = submittedMap.get(u.id) ?? new Set<string>();
 
       if (u.role === "Appointer") {
-        const required = 1; // 自己評価のみ
-        const submitted = done.has(`${u.id}:self`) ? 1 : 0;
+        const required  = 1;
+        const submittedCount = done.has(`${u.id}:self`) ? 1 : 0;
         return {
           id: u.id,
           name: u.nickname ?? u.name ?? u.id,
           role: u.role,
           team: u.team,
           required,
-          submitted,
-          fullySubmitted: submitted >= required,
+          submitted: submittedCount,
+          fullySubmitted: submittedCount >= required,
+          detail: `自己評価: ${done.has(`${u.id}:self`) ? "済" : "未"}`,
         };
       }
 
       if (u.role === "AM") {
-        // 管轄アポインター数 + 自己評価
         const { data: appointers } = await supabaseAdmin
           .from("users")
-          .select("id")
+          .select("id, nickname, name")
           .eq("education_mentor_user_id", u.id)
           .eq("role", "Appointer")
           .eq("setup_completed", true);
 
         const appoCount = (appointers ?? []).length;
-        const required = appoCount + 1;
+        const required  = appoCount + 1;
         let submittedCount = 0;
+        const details: string[] = [];
+
         for (const a of appointers ?? []) {
-          if (done.has(`${a.id}:eval`)) submittedCount++;
+          const ok = done.has(`${a.id}:eval`);
+          if (ok) submittedCount++;
+          details.push(`${a.nickname ?? a.name}: ${ok ? "済" : "未"}`);
         }
-        if (done.has(`${u.id}:self`)) submittedCount++;
+        const selfOk = done.has(`${u.id}:self`);
+        if (selfOk) submittedCount++;
+        details.push(`自己: ${selfOk ? "済" : "未"}`);
 
         return {
           id: u.id,
@@ -88,6 +94,54 @@ export async function GET(req: NextRequest) {
           required,
           submitted: submittedCount,
           fullySubmitted: submittedCount >= required,
+          detail: details.join("　"),
+        };
+      }
+
+      if (u.role === "Sales") {
+        // 同チームのAMを取得
+        const { data: ams } = await supabaseAdmin
+          .from("users")
+          .select("id, nickname, name")
+          .eq("role", "AM")
+          .eq("team", u.team)
+          .eq("setup_completed", true);
+
+        const details: string[] = [];
+        let submittedCount = 0;
+        let required = 0;
+
+        for (const am of ams ?? []) {
+          // このAMの管轄アポインターを評価
+          const { data: appointers } = await supabaseAdmin
+            .from("users")
+            .select("id, nickname, name")
+            .eq("education_mentor_user_id", am.id)
+            .eq("role", "Appointer")
+            .eq("setup_completed", true);
+
+          for (const ap of appointers ?? []) {
+            required++;
+            const ok = done.has(`${ap.id}:eval`);
+            if (ok) submittedCount++;
+            details.push(`${ap.nickname ?? ap.name}評価: ${ok ? "済" : "未"}`);
+          }
+          // AMの評価
+          required++;
+          const amOk = done.has(`${am.id}:eval`);
+          if (amOk) submittedCount++;
+          details.push(`${am.nickname ?? am.name}(AM)評価: ${amOk ? "済" : "未"}`);
+        }
+
+        return {
+          id: u.id,
+          name: u.nickname ?? u.name ?? u.id,
+          role: u.role,
+          team: u.team,
+          required,
+          submitted: submittedCount,
+          fullySubmitted: required > 0 && submittedCount >= required,
+          detail: details.join("　"),
         };
       }
 
@@ -99,12 +153,13 @@ export async function GET(req: NextRequest) {
         required: 0,
         submitted: 0,
         fullySubmitted: true,
+        detail: "",
       };
     })
   );
 
-  const total      = result.length;
-  const doneCount  = result.filter((r) => r.fullySubmitted).length;
+  const total     = result.length;
+  const doneCount = result.filter((r) => r.fullySubmitted).length;
 
   return NextResponse.json({ users: result, total, doneCount, year, month });
 }
