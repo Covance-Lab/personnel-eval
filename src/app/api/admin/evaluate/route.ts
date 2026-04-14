@@ -1,7 +1,7 @@
 /**
  * GET  /api/admin/evaluate?year=&month=   — 算出済み評価結果一覧
  * POST /api/admin/evaluate                — 評価結果を算出・保存
- * PATCH /api/admin/evaluate               — 個人への表示/非表示切替
+ * PATCH /api/admin/evaluate               — 個人への表示/非表示切替 or 一括配信
  */
 
 import { NextRequest, NextResponse } from "next/server";
@@ -50,7 +50,7 @@ export async function GET(req: NextRequest) {
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-  // all_responded: 定性スコアが1つでも null or 0 以外であれば回答済みと判定
+  // all_responded: 定性スコアが全て1点以上であれば回答済みと判定
   const results = (data ?? []).map((r) => ({
     ...r,
     all_responded:
@@ -79,10 +79,10 @@ export async function POST(req: NextRequest) {
   const prevYear  = prevDate.getFullYear();
   const prevMonth = prevDate.getMonth() + 1;
 
-  // 対象ユーザー（Appointer + AM）
+  // 対象ユーザー（Appointer + AM）— team と education_mentor_user_id も取得
   const { data: users } = await supabaseAdmin
     .from("users")
-    .select("id, role")
+    .select("id, role, team, education_mentor_user_id")
     .in("role", ["Appointer", "AM"])
     .eq("setup_completed", true);
 
@@ -91,6 +91,21 @@ export async function POST(req: NextRequest) {
   }
 
   const userIds = users.map((u) => u.id);
+
+  // チームごとの営業マン一覧（FK joinなし）
+  const { data: salesUsers } = await supabaseAdmin
+    .from("users")
+    .select("id, team")
+    .eq("role", "Sales")
+    .eq("setup_completed", true);
+
+  // team → Sales IDセット
+  const salesByTeam = new Map<string, Set<string>>();
+  for (const s of salesUsers ?? []) {
+    if (!s.team) continue;
+    if (!salesByTeam.has(s.team)) salesByTeam.set(s.team, new Set());
+    salesByTeam.get(s.team)!.add(s.id);
+  }
 
   // 前月の実績データ（Appointer用定量評価）
   const { data: perfRecords } = await supabaseAdmin
@@ -107,82 +122,87 @@ export async function POST(req: NextRequest) {
   // 今月のアンケート回答（自己評価）
   const { data: selfAnswers } = await supabaseAdmin
     .from("survey_answers")
-    .select("respondent_id, target_id, q1_score, q2_score, q3_score, q4_score")
+    .select("respondent_id, q1_score, q2_score, q3_score, q4_score")
     .in("respondent_id", userIds)
     .eq("survey_type", "self")
     .eq("year", year)
     .eq("month", month);
 
-  // 今月のアンケート回答（他者評価）
+  // 今月のアンケート回答（他者評価 — FK joinなし）
   const { data: evalAnswers } = await supabaseAdmin
     .from("survey_answers")
-    .select("respondent_id, target_id, q1_score, q2_score, q3_score, q4_score, respondent_role:respondent_id(role, team)")
+    .select("respondent_id, target_id, q1_score, q2_score, q3_score, q4_score")
     .in("target_id", userIds)
     .eq("survey_type", "eval")
     .eq("year", year)
     .eq("month", month);
 
-  // 評価者のロール情報を取得（AMか営業マンか判別するため）
-  const respondentIds = [...new Set((evalAnswers ?? []).map((a) => a.respondent_id))];
-  const { data: respondentUsers } = respondentIds.length > 0
-    ? await supabaseAdmin.from("users").select("id, role, team").in("id", respondentIds)
-    : { data: [] };
-  const respondentRoleMap = new Map((respondentUsers ?? []).map((u) => [u.id, { role: u.role as string, team: u.team as string | null }]));
-
-  // target_id → 評価回答リスト（全体 / AMのみ / Salesのみ）
-  const evalByTarget    = new Map<string, typeof evalAnswers>();
-  const evalAMByTarget  = new Map<string, typeof evalAnswers>();
-  const evalSalesByTarget = new Map<string, typeof evalAnswers>();
+  // target_id → 回答リスト（respondent_id付き）
+  type EvalRow = { respondent_id: string; q1_score: number | null; q2_score: number | null; q3_score: number | null; q4_score: number | null };
+  const evalByTarget = new Map<string, EvalRow[]>();
   for (const a of evalAnswers ?? []) {
-    const resp = respondentRoleMap.get(a.respondent_id);
-    if (!evalByTarget.has(a.target_id))     evalByTarget.set(a.target_id, []);
-    evalByTarget.get(a.target_id)!.push(a);
-    if (resp?.role === "AM") {
-      if (!evalAMByTarget.has(a.target_id)) evalAMByTarget.set(a.target_id, []);
-      evalAMByTarget.get(a.target_id)!.push(a);
-    }
-    if (resp?.role === "Sales") {
-      if (!evalSalesByTarget.has(a.target_id)) evalSalesByTarget.set(a.target_id, []);
-      evalSalesByTarget.get(a.target_id)!.push(a);
-    }
+    if (!evalByTarget.has(a.target_id)) evalByTarget.set(a.target_id, []);
+    evalByTarget.get(a.target_id)!.push(a as EvalRow);
   }
 
-  // 自己評価マップ (respondent_id → 回答)
+  // 自己評価マップ
   const selfMap = new Map(
     (selfAnswers ?? []).map((a) => [a.respondent_id, a])
   );
 
+  console.log("[evaluate] year=%d month=%d prevYear=%d prevMonth=%d", year, month, prevYear, prevMonth);
+  console.log("[evaluate] users count=%d", users.length);
+  console.log("[evaluate] salesUsers:", (salesUsers ?? []).map((s) => ({ id: s.id, team: s.team })));
+  console.log("[evaluate] selfAnswers count=%d", (selfAnswers ?? []).length);
+  console.log("[evaluate] evalAnswers count=%d", (evalAnswers ?? []).length);
+  console.log("[evaluate] salesByTeam:", Object.fromEntries([...salesByTeam.entries()].map(([k, v]) => [k, [...v]])));
+
   const rows = users.map((u) => {
-    const perf  = perfMap.get(u.id);
-    const self  = selfMap.get(u.id);
-    const evals = evalByTarget.get(u.id) ?? [];
-    const amEvals    = evalAMByTarget.get(u.id)    ?? [];
-    const salesEvals = evalSalesByTarget.get(u.id) ?? [];
+    const perf   = perfMap.get(u.id);
+    const self   = selfMap.get(u.id);
+    const evals  = evalByTarget.get(u.id) ?? [];
+    const evalRespondentIds = new Set(evals.map((e) => e.respondent_id));
 
-    // ─── 3者回答チェック ───────────────────────────────────
-    // Appointer: 本人(self) + AM(eval) + 営業マン(eval) 全員必要
-    // AM:        本人(self) + 営業マン(eval) が必要
-    const hasSelf  = !!self;
-    const hasAMEval    = amEvals.length > 0;
-    const hasSalesEval = salesEvals.length > 0;
+    const userTeam   = u.team ?? "";
+    const salesInTeam = salesByTeam.get(userTeam) ?? new Set<string>();
 
-    const allRespondentsReady = u.role === "Appointer"
-      ? hasSelf && hasAMEval && hasSalesEval
-      : u.role === "AM"
-      ? hasSelf && hasSalesEval
-      : true;
+    // ─── 3者回答チェック ────────────────────────────────────────────
+    // Appointer: 本人(self) + 担当AM(eval) + チーム内全営業マン(eval) 全員必要
+    // AM:        本人(self) + チーム内全営業マン(eval) 全員必要
+    const hasSelf = !!self;
 
-    // ─── 定量スコア（Appointerのみ） ───────────────────────
-    const dmCount    = perf?.dm_count    ?? null;
-    const bSetRate   = perf?.appointment_rate != null ? Number(perf.appointment_rate) : null;
-    const workloadScore   = u.role === "Appointer"
-      ? (allRespondentsReady ? (dmCount   != null ? calcWorkload(dmCount)     : 1) : 0)
+    let allRespondentsReady = false;
+
+    if (u.role === "Appointer") {
+      const amId = u.education_mentor_user_id;
+      const hasAMEval    = amId ? evalRespondentIds.has(amId) : false;
+      const missingSales = [...salesInTeam].filter((sid) => !evalRespondentIds.has(sid));
+      const hasSalesEval = salesInTeam.size > 0 && missingSales.length === 0;
+      allRespondentsReady = hasSelf && hasAMEval && hasSalesEval;
+      console.log("[evaluate] Appointer %s: hasSelf=%s hasAMEval=%s (amId=%s) hasSalesEval=%s salesInTeam=%d evalRespondents=%s missingSales=%s => ready=%s",
+        u.nickname ?? u.id, hasSelf, hasAMEval, amId, hasSalesEval, salesInTeam.size, [...evalRespondentIds].join(","), missingSales.join(","), allRespondentsReady);
+    } else if (u.role === "AM") {
+      const missingSales = [...salesInTeam].filter((sid) => !evalRespondentIds.has(sid));
+      const hasSalesEval = salesInTeam.size > 0 && missingSales.length === 0;
+      allRespondentsReady = hasSelf && hasSalesEval;
+      console.log("[evaluate] AM %s: hasSelf=%s hasSalesEval=%s salesInTeam=%d evalRespondents=%s missingSales=%s => ready=%s",
+        u.nickname ?? u.id, hasSelf, hasSalesEval, salesInTeam.size, [...evalRespondentIds].join(","), missingSales.join(","), allRespondentsReady);
+    } else {
+      allRespondentsReady = true;
+    }
+
+    // ─── 定量スコア（Appointerのみ） ────────────────────────────────
+    const dmCount  = perf?.dm_count ?? null;
+    const bSetRate = perf?.appointment_rate != null ? Number(perf.appointment_rate) : null;
+
+    const workloadScore = u.role === "Appointer"
+      ? (allRespondentsReady ? (dmCount  != null ? calcWorkload(dmCount)     : 1) : 0)
       : null;
     const performanceScore = u.role === "Appointer"
       ? (allRespondentsReady ? (bSetRate != null ? calcPerformance(bSetRate) : 1) : 0)
       : null;
 
-    // ─── 定性スコア ─────────────────────────────────────────
+    // ─── 定性スコア ──────────────────────────────────────────────────
     const disciplineSelf   = allRespondentsReady ? (self?.q1_score ?? null) : 0;
     const absorptionSelf   = allRespondentsReady ? (self?.q2_score ?? null) : 0;
     const contributionSelf = allRespondentsReady ? (self?.q3_score ?? null) : 0;
@@ -210,7 +230,7 @@ export async function POST(req: NextRequest) {
       thinking_other:     thinkingOther,
       visible_to_user:    false,
       calculated_at:      new Date().toISOString(),
-      // all_responded はDBに保存せず返却のみ
+      // _all_responded はDBに保存しない（計算用のみ）
       _all_responded:     allRespondentsReady,
     };
   });
@@ -224,9 +244,24 @@ export async function POST(req: NextRequest) {
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-  // レスポンスには all_responded を含める（_プレフィックスを外す）
+  // レスポンスには all_responded を含める
   const responseRows = rows.map(({ _all_responded, ...rest }) => ({ ...rest, all_responded: _all_responded }));
-  return NextResponse.json({ ok: true, count: rows.length, results: responseRows });
+  return NextResponse.json({
+    ok: true,
+    count: rows.length,
+    results: responseRows,
+    _debug: {
+      year, month, prevYear, prevMonth,
+      selfAnswerCount: selfAnswers?.length ?? 0,
+      evalAnswerCount: evalAnswers?.length ?? 0,
+      salesByTeam: Object.fromEntries([...salesByTeam.entries()].map(([k, v]) => [k, [...v]])),
+      userSummary: rows.map(({ _all_responded, user_id, ...rest }) => ({
+        user_id,
+        all_responded: _all_responded,
+        discipline_self: rest.discipline_self,
+      })),
+    },
+  });
 }
 
 // ─── PATCH: 表示/非表示切替（個別 or 一括配信） ────────────────────────────

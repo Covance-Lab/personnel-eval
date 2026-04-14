@@ -961,12 +961,21 @@ function EvaluationSection() {
 
   const doneCount = statusUsers.filter((u) => u.fullySubmitted).length;
 
-  // 回答内容をターゲットごとにグループ化
-  const answersByTarget = new Map<string, SurveyAnswer[]>();
+  // 回答内容をチーム→ロール→個人→種別でグループ化
+  const ROLE_ORDER = ["Appointer", "AM", "Sales"];
+  type PersonAnswerGroup = { target: SurveyAnswer["target"]; self: SurveyAnswer[]; eval: SurveyAnswer[] };
+  const teamGrouped = new Map<string, Map<string, Map<string, PersonAnswerGroup>>>();
   for (const a of answers) {
-    const key = `${a.target?.id ?? "?"}_${a.survey_type}`;
-    if (!answersByTarget.has(key)) answersByTarget.set(key, []);
-    answersByTarget.get(key)!.push(a);
+    const team = a.target?.team ?? "不明";
+    const role = a.target?.role ?? "不明";
+    const pid  = a.target?.id ?? "?";
+    if (!teamGrouped.has(team)) teamGrouped.set(team, new Map());
+    const roleMap = teamGrouped.get(team)!;
+    if (!roleMap.has(role)) roleMap.set(role, new Map());
+    const personMap = roleMap.get(role)!;
+    if (!personMap.has(pid)) personMap.set(pid, { target: a.target, self: [], eval: [] });
+    const pg = personMap.get(pid)!;
+    if (a.survey_type === "self") pg.self.push(a); else pg.eval.push(a);
   }
 
   return (
@@ -1056,59 +1065,105 @@ function EvaluationSection() {
           </div>
 
           {answersLoaded && (
-            <div className="space-y-2">
+            <div className="space-y-4 text-xs">
               {answers.length === 0 ? (
                 <p className="text-xs text-gray-400 text-center py-3">回答がまだありません</p>
               ) : (
-                <div className="rounded-lg border overflow-hidden divide-y text-xs">
-                  {Array.from(answersByTarget.entries()).map(([key, group]) => {
-                    const first = group[0];
-                    const targetName = first.target?.nickname ?? first.target?.name ?? first.target?.id ?? "—";
-                    const targetRole = first.target?.role ? (ROLE_LABELS[first.target.role] ?? first.target.role) : "";
-                    const typeLabel  = first.survey_type === "self" ? "自己評価" : "他者評価";
-                    const isOpen     = expandedAnswer === key;
-                    return (
-                      <div key={key} className="bg-white">
-                        <button
-                          className="w-full flex items-center justify-between px-3 py-2.5 text-left hover:bg-gray-50"
-                          onClick={() => setExpandedAnswer(isOpen ? null : key)}
-                        >
-                          <span className="flex items-center gap-2">
-                            <span className="font-medium text-gray-800">{targetName}</span>
-                            <span className="text-gray-400">{targetRole}</span>
-                            <span className={`px-1.5 py-0.5 rounded text-xs font-medium ${first.survey_type === "self" ? "bg-indigo-100 text-indigo-700" : "bg-pink-100 text-pink-700"}`}>{typeLabel}</span>
-                            <span className="text-gray-400">{group.length}名回答</span>
-                          </span>
-                          {isOpen ? <ChevronUp className="w-4 h-4 text-gray-400" /> : <ChevronDown className="w-4 h-4 text-gray-400" />}
-                        </button>
-                        {isOpen && (
-                          <div className="px-3 pb-3 space-y-3">
-                            {group.map((ans) => {
-                              const respName = ans.respondent?.nickname ?? ans.respondent?.name ?? "—";
-                              const respRole = ans.respondent?.role ? (ROLE_LABELS[ans.respondent.role] ?? ans.respondent.role) : "";
-                              return (
-                                <div key={ans.id} className="bg-gray-50 rounded-lg p-3 space-y-2">
-                                  <p className="font-medium text-gray-700">{respName} <span className="text-gray-400 font-normal">({respRole})</span></p>
-                                  {[0, 1, 2, 3].map((qi) => {
-                                    const score  = [ans.q1_score, ans.q2_score, ans.q3_score, ans.q4_score][qi];
-                                    const reason = [ans.q1_reason, ans.q2_reason, ans.q3_reason, ans.q4_reason][qi];
-                                    return (
-                                      <div key={qi} className="flex gap-2">
-                                        <span className="text-gray-500 w-16 shrink-0">Q{qi + 1}. {Q_LABELS[qi]}</span>
-                                        <span className="font-bold text-indigo-600">{score != null ? `${score}点` : "未回答"}</span>
-                                        {reason && <span className="text-gray-500 flex-1">{reason}</span>}
-                                      </div>
-                                    );
-                                  })}
-                                </div>
-                              );
-                            })}
+                Array.from(teamGrouped.entries()).map(([team, roleMap]) => (
+                  <div key={team} className="rounded-lg border overflow-hidden">
+                    {/* チーム見出し */}
+                    <div className="bg-gray-100 px-3 py-2 font-semibold text-gray-700">【{team}】</div>
+                    <div className="divide-y">
+                      {ROLE_ORDER.filter((role) => roleMap.has(role)).map((role) => (
+                        <div key={role}>
+                          {/* ロール見出し */}
+                          <div className="bg-gray-50 px-3 py-1.5 font-medium text-gray-600">
+                            ・{ROLE_LABELS[role] ?? role}
                           </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
+                          {/* 個人リスト */}
+                          {Array.from(roleMap.get(role)!.entries()).map(([pid, pg]) => {
+                            const personName = pg.target?.nickname ?? pg.target?.name ?? pid;
+                            const selfKey = `${team}_${role}_${pid}_self`;
+                            const evalKey = `${team}_${role}_${pid}_eval`;
+                            const selfOpen = expandedAnswer === selfKey;
+                            const evalOpen = expandedAnswer === evalKey;
+                            return (
+                              <div key={pid} className="border-t first:border-t-0">
+                                {/* 個人行 */}
+                                <div className="flex items-center gap-3 px-4 py-2.5 bg-white">
+                                  <span className="font-medium text-gray-800 w-20 shrink-0">{personName}</span>
+                                  {pg.self.length > 0 && (
+                                    <button
+                                      onClick={() => setExpandedAnswer(selfOpen ? null : selfKey)}
+                                      className={`flex items-center gap-1 px-2 py-1 rounded text-xs font-medium border transition-colors ${selfOpen ? "bg-indigo-600 text-white border-indigo-600" : "bg-indigo-50 text-indigo-700 border-indigo-200 hover:bg-indigo-100"}`}
+                                    >
+                                      自己評価
+                                      {selfOpen ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+                                    </button>
+                                  )}
+                                  {pg.eval.length > 0 && (
+                                    <button
+                                      onClick={() => setExpandedAnswer(evalOpen ? null : evalKey)}
+                                      className={`flex items-center gap-1 px-2 py-1 rounded text-xs font-medium border transition-colors ${evalOpen ? "bg-pink-600 text-white border-pink-600" : "bg-pink-50 text-pink-700 border-pink-200 hover:bg-pink-100"}`}
+                                    >
+                                      他者評価 {pg.eval.length}名
+                                      {evalOpen ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+                                    </button>
+                                  )}
+                                </div>
+                                {/* 自己評価展開 */}
+                                {selfOpen && (
+                                  <div className="bg-indigo-50 px-4 pb-3 space-y-2">
+                                    {pg.self.map((ans) => (
+                                      <div key={ans.id} className="bg-white rounded-lg p-3 space-y-1.5 mt-2">
+                                        {[0, 1, 2, 3].map((qi) => {
+                                          const score  = [ans.q1_score, ans.q2_score, ans.q3_score, ans.q4_score][qi];
+                                          const reason = [ans.q1_reason, ans.q2_reason, ans.q3_reason, ans.q4_reason][qi];
+                                          return (
+                                            <div key={qi} className="flex gap-2">
+                                              <span className="text-gray-500 w-20 shrink-0">Q{qi + 1}. {Q_LABELS[qi]}</span>
+                                              <span className="font-bold text-indigo-600">{score != null ? `${score}点` : "未回答"}</span>
+                                              {reason && <span className="text-gray-500 flex-1">{reason}</span>}
+                                            </div>
+                                          );
+                                        })}
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
+                                {/* 他者評価展開 */}
+                                {evalOpen && (
+                                  <div className="bg-pink-50 px-4 pb-3 space-y-2">
+                                    {pg.eval.map((ans) => {
+                                      const respName = ans.respondent?.nickname ?? ans.respondent?.name ?? "—";
+                                      const respRole = ans.respondent?.role ? (ROLE_LABELS[ans.respondent.role] ?? ans.respondent.role) : "";
+                                      return (
+                                        <div key={ans.id} className="bg-white rounded-lg p-3 space-y-1.5 mt-2">
+                                          <p className="font-medium text-gray-700 mb-1">{respName} <span className="text-gray-400 font-normal text-xs">({respRole})</span></p>
+                                          {[0, 1, 2, 3].map((qi) => {
+                                            const score  = [ans.q1_score, ans.q2_score, ans.q3_score, ans.q4_score][qi];
+                                            const reason = [ans.q1_reason, ans.q2_reason, ans.q3_reason, ans.q4_reason][qi];
+                                            return (
+                                              <div key={qi} className="flex gap-2">
+                                                <span className="text-gray-500 w-20 shrink-0">Q{qi + 1}. {Q_LABELS[qi]}</span>
+                                                <span className="font-bold text-pink-600">{score != null ? `${score}点` : "未回答"}</span>
+                                                {reason && <span className="text-gray-500 flex-1">{reason}</span>}
+                                              </div>
+                                            );
+                                          })}
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))
               )}
             </div>
           )}
