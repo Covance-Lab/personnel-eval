@@ -32,9 +32,9 @@ function getNavItems(role: Role, currentPath: string, router: ReturnType<typeof 
       ];
     case "Sales":
       return [
-        { label: "チーム実績",  href: "/sales",           icon: <TrendingUp className="w-5 h-5" />,  onClick: go("/sales"),           active: isActive("/sales") },
-        { label: "人事評価",    href: "/hr",              icon: <Users className="w-5 h-5" />,       onClick: go("/hr"),              active: isActive("/hr") },
-        { label: "プロフィール設定", href: "/profile/setup", icon: <User className="w-5 h-5" />,    onClick: go("/profile/setup"),   active: isActive("/profile/setup") },
+        { label: "チーム実績",     href: "/sales",        icon: <TrendingUp className="w-5 h-5" />,  onClick: go("/sales"),         active: isActive("/sales") },
+        { label: "アポインター管理", href: "/hr",           icon: <Users className="w-5 h-5" />,       onClick: go("/hr"),            active: isActive("/hr") },
+        { label: "プロフィール設定", href: "/profile/setup", icon: <User className="w-5 h-5" />,    onClick: go("/profile/setup"),  active: isActive("/profile/setup") },
       ];
     case "AM":
       return [

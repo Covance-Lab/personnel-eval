@@ -105,7 +105,7 @@ function AppointerDetail({
 }) {
   const [evalData, setEvalData] = useState<EvalData | null>(null);
   const [evalLoading, setEvalLoading] = useState(true);
-  const [tab, setTab] = useState<"profile" | "eval" | "roadmap">("profile");
+  const [tab, setTab] = useState<"status" | "eval" | "profile">("status");
 
   useEffect(() => {
     setEvalLoading(true);
@@ -126,9 +126,9 @@ function AppointerDetail({
   ] : [];
 
   const TABS = [
-    { key: "profile",  label: "プロフィール" },
-    { key: "eval",     label: "人事評価" },
-    { key: "roadmap",  label: "ロードマップ" },
+    { key: "status",  label: "ステータス" },
+    { key: "eval",    label: "人事評価" },
+    { key: "profile", label: "プロフィール" },
   ] as const;
 
   return (
@@ -148,20 +148,20 @@ function AppointerDetail({
         ))}
       </div>
 
-      {/* プロフィール */}
-      {tab === "profile" && (
-        <div className="space-y-2 text-sm">
-          {[
-            { label: "年齢",     value: user.age ? `${user.age}歳` : "未設定" },
-            { label: "性別",     value: user.gender ?? "未設定" },
-            { label: "趣味",     value: user.hobbies?.trim() || "未設定" },
-            { label: "自己紹介", value: user.self_introduction?.trim() || "未設定" },
-          ].map(({ label, value }) => (
-            <div key={label} className="flex gap-2">
-              <span className="text-xs text-gray-400 w-16 shrink-0 pt-0.5">{label}</span>
-              <span className="text-xs text-gray-700 flex-1 whitespace-pre-line">{value}</span>
-            </div>
-          ))}
+      {/* ステータス */}
+      {tab === "status" && (
+        <div>
+          {roadmap ? (
+            <RoadmapAppointerRowDB
+              userId={user.id}
+              label={user.nickname ?? user.name ?? user.id}
+              roadmap={roadmap}
+              readOnly={false}
+              onUpdated={onRoadmapUpdated}
+            />
+          ) : (
+            <p className="text-xs text-gray-400 text-center py-4">ロードマップ未登録</p>
+          )}
         </div>
       )}
 
@@ -234,20 +234,20 @@ function AppointerDetail({
         </div>
       )}
 
-      {/* ロードマップ */}
-      {tab === "roadmap" && (
-        <div>
-          {roadmap ? (
-            <RoadmapAppointerRowDB
-              userId={user.id}
-              label={user.nickname ?? user.name ?? user.id}
-              roadmap={roadmap}
-              readOnly={false}
-              onUpdated={onRoadmapUpdated}
-            />
-          ) : (
-            <p className="text-xs text-gray-400 text-center py-4">ロードマップ未登録</p>
-          )}
+      {/* プロフィール */}
+      {tab === "profile" && (
+        <div className="space-y-2 text-sm">
+          {[
+            { label: "年齢",     value: user.age ? `${user.age}歳` : "未設定" },
+            { label: "性別",     value: user.gender ?? "未設定" },
+            { label: "趣味",     value: user.hobbies?.trim() || "未設定" },
+            { label: "自己紹介", value: user.self_introduction?.trim() || "未設定" },
+          ].map(({ label, value }) => (
+            <div key={label} className="flex gap-2">
+              <span className="text-xs text-gray-400 w-16 shrink-0 pt-0.5">{label}</span>
+              <span className="text-xs text-gray-700 flex-1 whitespace-pre-line">{value}</span>
+            </div>
+          ))}
         </div>
       )}
     </div>

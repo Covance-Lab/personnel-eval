@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import PageLayout from "@/components/layout/PageLayout";
 import SurveyNotice from "@/components/survey/SurveyNotice";
-import EvaluationResult from "@/components/evaluation/EvaluationResult";
 import {
   PieChart, Pie, Cell, ResponsiveContainer, Tooltip,
   LineChart, Line, XAxis, YAxis, CartesianGrid, Legend,
@@ -298,9 +297,6 @@ export default function AMPage() {
             </ResponsiveContainer>
           </div>
         )}
-
-        {/* 人事評価結果（管理者が公開した場合のみ表示） */}
-        <EvaluationResult role="AM" />
 
       </div>
     </PageLayout>

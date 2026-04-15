@@ -7,10 +7,9 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import {
   Users, UserCheck, UserX, TrendingUp,
-  ChevronDown, ChevronUp, Award,
+  ChevronDown, ChevronUp,
 } from "lucide-react";
 import PageLayout from "@/components/layout/PageLayout";
-import TeamEvaluationList from "@/components/evaluation/TeamEvaluationList";
 import {
   RadarChart, Radar, PolarGrid, PolarAngleAxis,
   ResponsiveContainer, Legend,
@@ -34,6 +33,10 @@ interface UserRecord {
   amMemo: string;
   amName: string | null;
   education_mentor_user_id?: string | null;
+  age?: number;
+  gender?: string;
+  hobbies?: string;
+  self_introduction?: string;
 }
 
 interface PreDebutStep {
@@ -72,51 +75,111 @@ const TEAM_COLORS: Record<string, string> = {
 const STEP_LABELS = ["未着手", "STEP 1", "STEP 2", "STEP 3", "STEP 4", "STEP 5"];
 
 // ────────────────────────────────────────────
-// アポインター行（Sales用、展開して詳細表示）
+// レーダーチャート（共通）
 // ────────────────────────────────────────────
-function AppointerExpandRow({ user: u }: { user: UserRecord }) {
-  const [open, setOpen] = useState(false);
-  const [eval_, setEval] = useState<EvalData | null>(null);
-  const [evalLoading, setEvalLoading] = useState(false);
+function EvalPanel({ userId }: { userId: string }) {
+  const [eval_, setEval] = useState<EvalData | null | "loading">("loading");
 
-  const avatar = u.icon_image_url ?? u.line_picture_url;
-  const displayName = u.nickname ?? u.name ?? u.id;
-  const bSetRateStr = u.bSetRate != null ? `${Number(u.bSetRate).toFixed(2)}%` : "—";
-
-  async function loadEval() {
-    if (eval_ !== null || evalLoading) return;
-    setEvalLoading(true);
+  useEffect(() => {
     const now = new Date();
-    const res = await fetch(
-      `/api/evaluation?view=member&userId=${u.id}&year=${now.getFullYear()}&month=${now.getMonth() + 1}`
-    );
-    if (res.ok) {
-      const d = await res.json();
-      setEval(d.result ?? null);
-    }
-    setEvalLoading(false);
-  }
+    fetch(`/api/evaluation?view=member&userId=${userId}&year=${now.getFullYear()}&month=${now.getMonth() + 1}`)
+      .then((r) => r.ok ? r.json() : null)
+      .then((d) => setEval(d?.result ?? null))
+      .catch(() => setEval(null));
+  }, [userId]);
 
-  function handleToggle() {
-    setOpen((v) => !v);
-    if (!open) loadEval();
-  }
+  if (eval_ === "loading") return <p className="text-xs text-gray-400 text-center py-4">読み込み中...</p>;
+  if (!eval_) return <p className="text-xs text-gray-400 text-center py-4">評価結果が公開されていません</p>;
 
-  const radarData = eval_ ? [
+  const radarData = [
     { subject: "稼働量",   自己: eval_.workload_score    ?? 0, 他者: eval_.workload_score    ?? 0 },
     { subject: "成果",     自己: eval_.performance_score ?? 0, 他者: eval_.performance_score ?? 0 },
     { subject: "規律",    自己: eval_.discipline_self   ?? 0, 他者: eval_.discipline_other   != null ? +Number(eval_.discipline_other).toFixed(1)   : 0 },
     { subject: "吸収力",  自己: eval_.absorption_self   ?? 0, 他者: eval_.absorption_other   != null ? +Number(eval_.absorption_other).toFixed(1)   : 0 },
     { subject: "組織貢献", 自己: eval_.contribution_self ?? 0, 他者: eval_.contribution_other != null ? +Number(eval_.contribution_other).toFixed(1) : 0 },
     { subject: "思考力",  自己: eval_.thinking_self     ?? 0, 他者: eval_.thinking_other     != null ? +Number(eval_.thinking_other).toFixed(1)     : 0 },
-  ] : [];
+  ];
+
+  return (
+    <div className="space-y-3">
+      {(eval_.workload_score != null || eval_.performance_score != null) && (
+        <div className="grid grid-cols-2 gap-2">
+          {[
+            { label: "稼働量", score: eval_.workload_score, sub: eval_.dm_count != null ? `DM: ${eval_.dm_count}通` : undefined },
+            { label: "成果",   score: eval_.performance_score, sub: eval_.b_set_rate != null ? `B設定率: ${Number(eval_.b_set_rate).toFixed(2)}%` : undefined },
+          ].map(({ label, score, sub }) => score != null && (
+            <div key={label} className="bg-white rounded-lg border p-2 text-center">
+              <p className="text-xs text-gray-500">{label}</p>
+              {sub && <p className="text-xs text-gray-400">{sub}</p>}
+              <p className="text-xl font-bold text-indigo-600">{score}<span className="text-xs text-gray-400 ml-0.5">点</span></p>
+            </div>
+          ))}
+        </div>
+      )}
+      <p className="text-xs text-gray-400">
+        <span className="text-indigo-500 font-medium">■ 自己</span>
+        　<span className="text-pink-500 font-medium">■ 他者</span>
+      </p>
+      <ResponsiveContainer width="100%" height={180}>
+        <RadarChart data={radarData} margin={{ top: 5, right: 25, bottom: 5, left: 25 }}>
+          <PolarGrid />
+          <PolarAngleAxis dataKey="subject" tick={{ fontSize: 10 }} />
+          <Radar name="自己" dataKey="自己" stroke="#6366f1" fill="#6366f1" fillOpacity={0.25} />
+          <Radar name="他者" dataKey="他者" stroke="#ec4899" fill="#ec4899" fillOpacity={0.2} />
+          <Legend wrapperStyle={{ fontSize: 11 }} />
+        </RadarChart>
+      </ResponsiveContainer>
+      <div className="rounded-lg border overflow-hidden bg-white">
+        <table className="w-full text-xs">
+          <thead className="bg-gray-50">
+            <tr>
+              <th className="text-left px-3 py-1.5 font-medium text-gray-600">項目</th>
+              <th className="text-center px-3 py-1.5 font-medium text-indigo-600">自己</th>
+              <th className="text-center px-3 py-1.5 font-medium text-pink-600">他者</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y">
+            {[
+              { label: "規律",    s: eval_.discipline_self,   o: eval_.discipline_other },
+              { label: "吸収力",  s: eval_.absorption_self,   o: eval_.absorption_other },
+              { label: "組織貢献", s: eval_.contribution_self, o: eval_.contribution_other },
+              { label: "思考力",  s: eval_.thinking_self,     o: eval_.thinking_other },
+            ].map(({ label, s, o }) => (
+              <tr key={label}>
+                <td className="px-3 py-1.5 font-medium text-gray-700">{label}</td>
+                <td className="px-3 py-1.5 text-center text-indigo-600 font-semibold">{s ?? "—"}</td>
+                <td className="px-3 py-1.5 text-center text-pink-600 font-semibold">{o != null ? Number(o).toFixed(1) : "—"}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+// ────────────────────────────────────────────
+// タブ付き展開行（アポインター用）
+// ────────────────────────────────────────────
+function AppointerExpandRow({ user: u }: { user: UserRecord }) {
+  const [open, setOpen] = useState(false);
+  const [tab, setTab] = useState<"status" | "eval" | "profile">("status");
+
+  const avatar = u.icon_image_url ?? u.line_picture_url;
+  const displayName = u.nickname ?? u.name ?? u.id;
+  const bSetRateStr = u.bSetRate != null ? `${Number(u.bSetRate).toFixed(2)}%` : "—";
+
+  const TABS = [
+    { key: "status" as const,  label: "ステータス" },
+    { key: "eval"   as const,  label: "人事評価" },
+    { key: "profile" as const, label: "プロフィール" },
+  ];
 
   return (
     <div className="border-b last:border-b-0">
-      {/* 行ヘッダー（常時表示） */}
       <button
         className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-gray-50 transition-colors"
-        onClick={handleToggle}
+        onClick={() => setOpen((v) => !v)}
       >
         {avatar ? (
           // eslint-disable-next-line @next/next/no-img-element
@@ -126,7 +189,6 @@ function AppointerExpandRow({ user: u }: { user: UserRecord }) {
             <span className="text-xs text-gray-500">{displayName.charAt(0)}</span>
           </div>
         )}
-
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
             <span className="text-sm font-semibold text-gray-800">{displayName}</span>
@@ -138,8 +200,6 @@ function AppointerExpandRow({ user: u }: { user: UserRecord }) {
             </p>
           )}
         </div>
-
-        {/* DM / B設定 / B設定率 */}
         <div className="flex items-center gap-3 shrink-0 text-right">
           <div>
             <p className="text-xs text-gray-400">DM数</p>
@@ -157,128 +217,197 @@ function AppointerExpandRow({ user: u }: { user: UserRecord }) {
         </div>
       </button>
 
-      {/* 展開詳細 */}
       {open && (
-        <div className="bg-gray-50 px-4 pb-4 pt-3 space-y-4 border-t">
+        <div className="bg-gray-50 px-4 pb-4 pt-3 border-t space-y-3">
+          {/* タブ */}
+          <div className="flex gap-1 bg-gray-200 rounded-lg p-0.5">
+            {TABS.map((t) => (
+              <button
+                key={t.key}
+                onClick={() => setTab(t.key)}
+                className={`flex-1 text-xs py-1.5 rounded-md transition-colors font-medium ${
+                  tab === t.key ? "bg-white text-indigo-700 shadow-sm" : "text-gray-500"
+                }`}
+              >
+                {t.label}
+              </button>
+            ))}
+          </div>
 
-          {/* 人事評価結果 */}
-          <div>
-            <p className="text-xs font-semibold text-gray-700 mb-2 flex items-center gap-1.5">
-              <Award className="w-3.5 h-3.5 text-indigo-500" /> 人事評価結果
-            </p>
-            {evalLoading ? (
-              <p className="text-xs text-gray-400">読み込み中...</p>
-            ) : eval_ ? (
-              <div className="space-y-2">
-                <div className="grid grid-cols-2 gap-2">
-                  {[
-                    { label: "稼働量", score: eval_.workload_score, sub: eval_.dm_count != null ? `DM: ${eval_.dm_count}通` : undefined },
-                    { label: "成果", score: eval_.performance_score, sub: eval_.b_set_rate != null ? `B設定率: ${Number(eval_.b_set_rate).toFixed(2)}%` : undefined },
-                  ].filter(i => i.score != null).map(({ label, score, sub }) => (
-                    <div key={label} className="bg-white rounded-lg border p-2 text-center">
-                      <p className="text-xs text-gray-500">{label}</p>
-                      {sub && <p className="text-xs text-gray-400">{sub}</p>}
-                      <p className="text-xl font-bold text-indigo-600">{score}<span className="text-xs text-gray-400 ml-0.5">点</span></p>
+          {/* ステータス */}
+          {tab === "status" && (
+            <div className="space-y-3">
+              <div>
+                <p className="text-xs font-semibold text-gray-700 mb-2">デビューまでの段階</p>
+                <div className="flex gap-1.5 flex-wrap">
+                  {Array.from({ length: 6 }, (_, i) => i + 1).map((step) => (
+                    <div
+                      key={step}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-medium border ${
+                        u.debuted || u.completedStepCount >= step
+                          ? "bg-indigo-600 text-white border-indigo-600"
+                          : "bg-white text-gray-400 border-gray-200"
+                      }`}
+                    >
+                      STEP {step}
                     </div>
                   ))}
-                </div>
-                <ResponsiveContainer width="100%" height={180}>
-                  <RadarChart data={radarData} margin={{ top: 5, right: 25, bottom: 5, left: 25 }}>
-                    <PolarGrid />
-                    <PolarAngleAxis dataKey="subject" tick={{ fontSize: 10 }} />
-                    <Radar name="自己" dataKey="自己" stroke="#6366f1" fill="#6366f1" fillOpacity={0.25} />
-                    <Radar name="他者" dataKey="他者" stroke="#ec4899" fill="#ec4899" fillOpacity={0.2} />
-                    <Legend wrapperStyle={{ fontSize: 11 }} />
-                  </RadarChart>
-                </ResponsiveContainer>
-                <div className="rounded-lg border overflow-hidden bg-white">
-                  <table className="w-full text-xs">
-                    <thead className="bg-gray-50">
-                      <tr>
-                        <th className="text-left px-3 py-1.5 font-medium text-gray-600">項目</th>
-                        <th className="text-center px-3 py-1.5 font-medium text-indigo-600">自己</th>
-                        <th className="text-center px-3 py-1.5 font-medium text-pink-600">他者</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y">
-                      {[
-                        { label: "規律", s: eval_.discipline_self, o: eval_.discipline_other },
-                        { label: "吸収力", s: eval_.absorption_self, o: eval_.absorption_other },
-                        { label: "組織貢献", s: eval_.contribution_self, o: eval_.contribution_other },
-                        { label: "思考力", s: eval_.thinking_self, o: eval_.thinking_other },
-                      ].map(({ label, s, o }) => (
-                        <tr key={label}>
-                          <td className="px-3 py-1.5 font-medium text-gray-700">{label}</td>
-                          <td className="px-3 py-1.5 text-center text-indigo-600 font-semibold">{s ?? "—"}</td>
-                          <td className="px-3 py-1.5 text-center text-pink-600 font-semibold">{o != null ? Number(o).toFixed(1) : "—"}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                  {u.debuted && (
+                    <div className="px-3 py-1.5 rounded-lg text-xs font-medium bg-green-100 text-green-700 border border-green-300">
+                      デビュー済み
+                    </div>
+                  )}
                 </div>
               </div>
-            ) : (
-              <p className="text-xs text-gray-400">評価結果が公開されていません</p>
-            )}
-          </div>
-
-          {/* デビューまでの段階 */}
-          <div>
-            <p className="text-xs font-semibold text-gray-700 mb-2">デビューまでの段階</p>
-            <div className="flex gap-1.5 flex-wrap">
-              {Array.from({ length: 6 }, (_, i) => i + 1).map((step) => (
-                <div
-                  key={step}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-medium border ${
-                    u.debuted || u.completedStepCount >= step
-                      ? "bg-indigo-600 text-white border-indigo-600"
-                      : "bg-white text-gray-400 border-gray-200"
-                  }`}
-                >
-                  STEP {step}
+              {u.amMemo ? (
+                <div>
+                  <p className="text-xs font-semibold text-gray-700 mb-1">AMのメモ</p>
+                  <p className="text-xs text-gray-600 bg-white rounded-lg border p-3 whitespace-pre-wrap">{u.amMemo}</p>
                 </div>
-              ))}
-              {u.debuted && (
-                <div className="px-3 py-1.5 rounded-lg text-xs font-medium bg-green-100 text-green-700 border border-green-300">
-                  デビュー済み
-                </div>
+              ) : (
+                <p className="text-xs text-gray-400">AMのメモはありません</p>
               )}
-            </div>
-          </div>
-
-          {/* AMのメモ */}
-          {u.amMemo && (
-            <div>
-              <p className="text-xs font-semibold text-gray-700 mb-1">AMのメモ</p>
-              <p className="text-xs text-gray-600 bg-white rounded-lg border p-3 whitespace-pre-wrap">{u.amMemo}</p>
             </div>
           )}
 
+          {/* 人事評価 */}
+          {tab === "eval" && <EvalPanel userId={u.id} />}
+
           {/* プロフィール */}
-          <div>
-            <p className="text-xs font-semibold text-gray-700 mb-2">プロフィール</p>
-            <div className="bg-white rounded-lg border p-3 space-y-1 text-xs">
-              <div className="flex gap-2">
-                <span className="text-gray-400 w-20 shrink-0">チーム</span>
-                <span className="text-gray-700">{u.team ?? "—"}</span>
-              </div>
-              <div className="flex gap-2">
-                <span className="text-gray-400 w-20 shrink-0">担当AM</span>
-                <span className="text-gray-700">{u.amName ?? "—"}</span>
-              </div>
-              <div className="flex gap-2">
-                <span className="text-gray-400 w-20 shrink-0">登録日</span>
-                <span className="text-gray-700">
-                  {u.created_at ? new Date(u.created_at).toLocaleDateString("ja-JP") : "—"}
-                </span>
-              </div>
-              <div className="flex gap-2">
-                <span className="text-gray-400 w-20 shrink-0">ステータス</span>
-                <StatusBadge user={u} />
-              </div>
+          {tab === "profile" && (
+            <div className="bg-white rounded-lg border p-3 space-y-1.5 text-xs">
+              {[
+                { label: "チーム",    value: u.team ?? "—" },
+                { label: "担当AM",   value: u.amName ?? "—" },
+                { label: "登録日",    value: u.created_at ? new Date(u.created_at).toLocaleDateString("ja-JP") : "—" },
+                { label: "ステータス", value: null },
+              ].map(({ label, value }) => value !== null ? (
+                <div key={label} className="flex gap-2">
+                  <span className="text-gray-400 w-20 shrink-0">{label}</span>
+                  <span className="text-gray-700">{value}</span>
+                </div>
+              ) : (
+                <div key={label} className="flex gap-2 items-center">
+                  <span className="text-gray-400 w-20 shrink-0">{label}</span>
+                  <StatusBadge user={u} />
+                </div>
+              ))}
             </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ────────────────────────────────────────────
+// タブ付き展開行（AM用）
+// ────────────────────────────────────────────
+function AMExpandRow({ user: u }: { user: UserRecord }) {
+  const [open, setOpen] = useState(false);
+  const [tab, setTab] = useState<"status" | "eval" | "profile">("status");
+
+  const avatar = u.icon_image_url ?? u.line_picture_url;
+  const displayName = u.nickname ?? u.name ?? u.id;
+
+  const TABS = [
+    { key: "status" as const,  label: "ステータス" },
+    { key: "eval"   as const,  label: "人事評価" },
+    { key: "profile" as const, label: "プロフィール" },
+  ];
+
+  // AMのステップは仮で7ステップ表示
+  const AM_TOTAL_STEPS = 7;
+
+  return (
+    <div className="border-b last:border-b-0">
+      <button
+        className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-gray-50 transition-colors"
+        onClick={() => setOpen((v) => !v)}
+      >
+        {avatar ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={avatar} alt={displayName} className="w-9 h-9 rounded-full object-cover shrink-0" />
+        ) : (
+          <div className="w-9 h-9 rounded-full bg-gray-200 flex items-center justify-center shrink-0">
+            <span className="text-xs text-gray-500">{displayName.charAt(0)}</span>
+          </div>
+        )}
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-sm font-semibold text-gray-800">{displayName}</span>
+            <Badge variant="outline" className="text-xs">AM</Badge>
+          </div>
+          {u.team && <p className="text-xs text-gray-400 mt-0.5">{u.team}</p>}
+        </div>
+        {open ? <ChevronUp className="w-4 h-4 text-gray-400 ml-1" /> : <ChevronDown className="w-4 h-4 text-gray-400 ml-1" />}
+      </button>
+
+      {open && (
+        <div className="bg-gray-50 px-4 pb-4 pt-3 border-t space-y-3">
+          {/* タブ */}
+          <div className="flex gap-1 bg-gray-200 rounded-lg p-0.5">
+            {TABS.map((t) => (
+              <button
+                key={t.key}
+                onClick={() => setTab(t.key)}
+                className={`flex-1 text-xs py-1.5 rounded-md transition-colors font-medium ${
+                  tab === t.key ? "bg-white text-indigo-700 shadow-sm" : "text-gray-500"
+                }`}
+              >
+                {t.label}
+              </button>
+            ))}
           </div>
 
+          {/* ステータス */}
+          {tab === "status" && (
+            <div className="space-y-3">
+              <div>
+                <p className="text-xs font-semibold text-gray-700 mb-2">ステップ進捗</p>
+                <div className="flex gap-1.5 flex-wrap">
+                  {Array.from({ length: AM_TOTAL_STEPS }, (_, i) => i + 1).map((step) => (
+                    <div
+                      key={step}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-medium border ${
+                        u.completedStepCount >= step
+                          ? "bg-indigo-600 text-white border-indigo-600"
+                          : "bg-white text-gray-400 border-gray-200"
+                      }`}
+                    >
+                      STEP {step}
+                    </div>
+                  ))}
+                </div>
+              </div>
+              {u.amMemo ? (
+                <div>
+                  <p className="text-xs font-semibold text-gray-700 mb-1">メモ</p>
+                  <p className="text-xs text-gray-600 bg-white rounded-lg border p-3 whitespace-pre-wrap">{u.amMemo}</p>
+                </div>
+              ) : (
+                <p className="text-xs text-gray-400">メモはありません</p>
+              )}
+            </div>
+          )}
+
+          {/* 人事評価 */}
+          {tab === "eval" && <EvalPanel userId={u.id} />}
+
+          {/* プロフィール */}
+          {tab === "profile" && (
+            <div className="bg-white rounded-lg border p-3 space-y-1.5 text-xs">
+              {[
+                { label: "チーム", value: u.team ?? "—" },
+                { label: "登録日", value: u.created_at ? new Date(u.created_at).toLocaleDateString("ja-JP") : "—" },
+              ].map(({ label, value }) => (
+                <div key={label} className="flex gap-2">
+                  <span className="text-gray-400 w-20 shrink-0">{label}</span>
+                  <span className="text-gray-700">{value}</span>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -302,7 +431,6 @@ function UserRow({ user: u }: { user: UserRecord }) {
           <span className="text-xs text-gray-500">{displayName.charAt(0)}</span>
         </div>
       )}
-
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 flex-wrap">
           <span className="text-sm font-medium">{displayName}</span>
@@ -325,7 +453,6 @@ function UserRow({ user: u }: { user: UserRecord }) {
           </p>
         )}
       </div>
-
       {u.role === "Appointer" && (
         <div className="text-right shrink-0">
           <p className="text-xs text-gray-400">DM / B設定</p>
@@ -392,13 +519,11 @@ export default function HRPage() {
   // ── Sales専用ビュー ────────────────────────────────
   if (isSales) {
     const appointers = users.filter((u) => u.role === "Appointer");
+    const ams        = users.filter((u) => u.role === "AM");
 
     return (
-      <PageLayout title="人事評価" role={role ?? "Sales"} userName={userName} userImage={image} userTeam={team}>
+      <PageLayout title="アポインター管理" role={role ?? "Sales"} userName={userName} userImage={image} userTeam={team}>
         <div className="space-y-6">
-
-          {/* チーム人事評価結果（AM＋アポインター） */}
-          <TeamEvaluationList title="チーム 人事評価結果" />
 
           {/* サマリーカード */}
           {summary && (
@@ -465,7 +590,7 @@ export default function HRPage() {
             </Card>
           )}
 
-          {/* アポインター一覧（展開式） */}
+          {/* アポインター一覧 */}
           <Card>
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-semibold text-gray-700">
@@ -485,6 +610,25 @@ export default function HRPage() {
               )}
             </CardContent>
           </Card>
+
+          {/* アポインターマネージャー一覧 */}
+          {ams.length > 0 && (
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-semibold text-gray-700">
+                  アポインターマネージャー一覧 <span className="font-normal text-gray-400 ml-1">({ams.length}人)</span>
+                </CardTitle>
+                <p className="text-xs text-gray-400">名前をタップすると詳細が展開されます</p>
+              </CardHeader>
+              <CardContent className="p-0">
+                <div>
+                  {ams.map((u) => (
+                    <AMExpandRow key={u.id} user={u} />
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          )}
 
         </div>
       </PageLayout>
