@@ -83,13 +83,12 @@ export default function EvaluationResult({ role }: EvaluationResultProps) {
     { subject: "思考力",   自己評価: data.thinking_self,     他者評価: data.thinking_other     != null ? +Number(data.thinking_other).toFixed(1)     : null },
   ];
 
-  const radarData = role === "Appointer"
-    ? [
-        { subject: "稼働量", 自己評価: data.workload_score,    他者評価: data.workload_score },
-        { subject: "成果",   自己評価: data.performance_score, 他者評価: data.performance_score },
-        ...qualitativeItems,
-      ]
-    : qualitativeItems;
+  // 常に6軸（稼働量・成果はAppointerのみ値あり、AMは0で表示）
+  const radarData = [
+    { subject: "稼働量", 自己評価: data.workload_score    ?? 0, 他者評価: data.workload_score    ?? 0 },
+    { subject: "成果",   自己評価: data.performance_score ?? 0, 他者評価: data.performance_score ?? 0 },
+    ...qualitativeItems,
+  ];
 
   const hasRadar = radarData.some((d) => d.自己評価 != null || d.他者評価 != null);
 

@@ -62,12 +62,14 @@ function EvalCard({ result }: { result: EvalResult }) {
   const role = u?.role ?? "";
 
   const radarData = [
-    { subject: "規律",    自己: result.discipline_self,   他者: result.discipline_other   != null ? +Number(result.discipline_other).toFixed(1)   : null },
-    { subject: "吸収力",  自己: result.absorption_self,   他者: result.absorption_other   != null ? +Number(result.absorption_other).toFixed(1)   : null },
-    { subject: "組織貢献", 自己: result.contribution_self, 他者: result.contribution_other != null ? +Number(result.contribution_other).toFixed(1) : null },
-    { subject: "思考力",  自己: result.thinking_self,     他者: result.thinking_other     != null ? +Number(result.thinking_other).toFixed(1)     : null },
+    { subject: "稼働量",   自己: result.workload_score    ?? 0, 他者: result.workload_score    ?? 0 },
+    { subject: "成果",     自己: result.performance_score ?? 0, 他者: result.performance_score ?? 0 },
+    { subject: "規律",    自己: result.discipline_self   ?? 0, 他者: result.discipline_other   != null ? +Number(result.discipline_other).toFixed(1)   : 0 },
+    { subject: "吸収力",  自己: result.absorption_self   ?? 0, 他者: result.absorption_other   != null ? +Number(result.absorption_other).toFixed(1)   : 0 },
+    { subject: "組織貢献", 自己: result.contribution_self ?? 0, 他者: result.contribution_other != null ? +Number(result.contribution_other).toFixed(1) : 0 },
+    { subject: "思考力",  自己: result.thinking_self     ?? 0, 他者: result.thinking_other     != null ? +Number(result.thinking_other).toFixed(1)     : 0 },
   ];
-  const hasQualitative = radarData.some((d) => d.自己 != null || d.他者 != null);
+  const hasQualitative = radarData.some((d) => d.自己 !== 0 || d.他者 !== 0);
 
   return (
     <div className="rounded-xl border bg-white overflow-hidden">
