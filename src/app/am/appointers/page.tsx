@@ -10,6 +10,7 @@ import { RadarChart, Radar, PolarGrid, PolarAngleAxis, ResponsiveContainer, Lege
 import { ChevronDown, ChevronUp, Award, User } from "lucide-react";
 import type { PerformanceRecord } from "@/types/performance";
 import type { AppointerRoadmap } from "@/types/roadmap";
+import { ROADMAP_STEPS } from "@/types/roadmap";
 import type { Role } from "@/types/user";
 import { analyzePerformanceAlerts } from "@/types/performance";
 
@@ -71,6 +72,7 @@ function dbToRoadmap(row: Record<string, unknown>): AppointerRoadmap {
     completedStepCount: row.completed_step_count as number,
     deadlinesByStepId:  (row.deadlines_by_step_id ?? {}) as AppointerRoadmap["deadlinesByStepId"],
     amMemo:             (row.am_memo as string) ?? "",
+    salesMemo:          (row.sales_memo as string) ?? "",
   };
 }
 
@@ -150,7 +152,40 @@ function AppointerDetail({
 
       {/* ステータス */}
       {tab === "status" && (
-        <div>
+        <div className="space-y-3">
+          {/* デビューまでの段階（ツールチップ付き） */}
+          <div>
+            <p className="text-xs font-semibold text-gray-700 mb-2">デビューまでの段階</p>
+            <div className="flex gap-1.5 flex-wrap">
+              {ROADMAP_STEPS.map((step, i) => {
+                const completed = roadmap ? roadmap.completedStepCount > i : false;
+                return (
+                  <div key={step.id} className="relative group">
+                    <div className={`px-3 py-1.5 rounded-lg text-xs font-medium border cursor-default select-none ${
+                      completed
+                        ? "bg-indigo-600 text-white border-indigo-600"
+                        : "bg-white text-gray-400 border-gray-200"
+                    }`}>
+                      STEP {i + 1}
+                    </div>
+                    {/* ツールチップ */}
+                    <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 hidden group-hover:block z-20 w-44 bg-gray-800 text-white text-xs rounded-lg px-2.5 py-2 text-center pointer-events-none shadow-lg">
+                      <p className="font-semibold mb-0.5">STEP {i + 1}</p>
+                      <p className="text-gray-300">{step.label}</p>
+                      <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-gray-800" />
+                    </div>
+                  </div>
+                );
+              })}
+              {roadmap && roadmap.completedStepCount >= 6 && (
+                <div className="px-3 py-1.5 rounded-lg text-xs font-medium bg-green-100 text-green-700 border border-green-300">
+                  デビュー済み
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* ロードマップ詳細（AM編集） */}
           {roadmap ? (
             <RoadmapAppointerRowDB
               userId={user.id}
@@ -160,7 +195,15 @@ function AppointerDetail({
               onUpdated={onRoadmapUpdated}
             />
           ) : (
-            <p className="text-xs text-gray-400 text-center py-4">ロードマップ未登録</p>
+            <p className="text-xs text-gray-400 text-center py-2">ロードマップ未登録</p>
+          )}
+
+          {/* 営業マンのメモ（表示のみ・AMが閲覧可） */}
+          {roadmap?.salesMemo && (
+            <div>
+              <p className="text-xs font-semibold text-gray-700 mb-1">営業マンのメモ</p>
+              <p className="text-xs text-gray-600 bg-white rounded-lg border p-3 whitespace-pre-wrap">{roadmap.salesMemo}</p>
+            </div>
           )}
         </div>
       )}

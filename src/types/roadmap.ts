@@ -35,5 +35,10 @@ export interface AppointerRoadmap {
    * AMが残す自由記述メモ（アポインター別）
    */
   amMemo: string;
+  /**
+   * 営業マンが残す自由記述メモ（アポインター別）
+   * 同チームの営業マン・管理者のみ閲覧可（アポインター・他チームは見えない）
+   */
+  salesMemo?: string;
 }
 

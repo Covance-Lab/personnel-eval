@@ -14,6 +14,7 @@ import {
   RadarChart, Radar, PolarGrid, PolarAngleAxis,
   ResponsiveContainer, Legend,
 } from "recharts";
+import { ROADMAP_STEPS } from "@/types/roadmap";
 
 interface UserRecord {
   id: string;
@@ -31,12 +32,59 @@ interface UserRecord {
   bSetCount: number;
   bSetRate: number | null;
   amMemo: string;
+  salesMemo: string;
   amName: string | null;
   education_mentor_user_id?: string | null;
-  age?: number;
-  gender?: string;
-  hobbies?: string;
-  self_introduction?: string;
+}
+
+// ステップツールチップ付きボタン
+function StepBadge({ step, label, completed }: { step: number; label: string; completed: boolean }) {
+  return (
+    <div className="relative group">
+      <div className={`px-3 py-1.5 rounded-lg text-xs font-medium border cursor-default select-none ${
+        completed ? "bg-indigo-600 text-white border-indigo-600" : "bg-white text-gray-400 border-gray-200"
+      }`}>
+        STEP {step}
+      </div>
+      <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 hidden group-hover:block z-20 w-44 bg-gray-800 text-white text-xs rounded-lg px-2.5 py-2 text-center pointer-events-none shadow-lg">
+        <p className="font-semibold mb-0.5">STEP {step}</p>
+        <p className="text-gray-300">{label}</p>
+        <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-gray-800" />
+      </div>
+    </div>
+  );
+}
+
+// インライン編集メモ（Sales用）
+function SalesMemoEditor({ userId, initialValue, onSaved }: { userId: string; initialValue: string; onSaved: (v: string) => void }) {
+  const [value, setValue] = useState(initialValue);
+  const [saving, setSaving] = useState(false);
+
+  async function save() {
+    if (value === initialValue) return;
+    setSaving(true);
+    const r = await fetch(`/api/roadmap/${userId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ sales_memo: value }),
+    });
+    if (r.ok) onSaved(value);
+    setSaving(false);
+  }
+
+  return (
+    <div className="space-y-1.5">
+      <textarea
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
+        onBlur={save}
+        rows={3}
+        placeholder="メモを入力..."
+        className="w-full text-xs rounded-lg border border-gray-200 p-2.5 resize-none focus:outline-none focus:ring-1 focus:ring-indigo-400 bg-white"
+      />
+      {saving && <p className="text-xs text-gray-400">保存中...</p>}
+    </div>
+  );
 }
 
 interface PreDebutStep {
@@ -161,7 +209,7 @@ function EvalPanel({ userId }: { userId: string }) {
 // ────────────────────────────────────────────
 // タブ付き展開行（アポインター用）
 // ────────────────────────────────────────────
-function AppointerExpandRow({ user: u }: { user: UserRecord }) {
+function AppointerExpandRow({ user: u, onMemoSaved }: { user: UserRecord; onMemoSaved: (id: string, memo: string) => void }) {
   const [open, setOpen] = useState(false);
   const [tab, setTab] = useState<"status" | "eval" | "profile">("status");
 
@@ -240,17 +288,13 @@ function AppointerExpandRow({ user: u }: { user: UserRecord }) {
               <div>
                 <p className="text-xs font-semibold text-gray-700 mb-2">デビューまでの段階</p>
                 <div className="flex gap-1.5 flex-wrap">
-                  {Array.from({ length: 6 }, (_, i) => i + 1).map((step) => (
-                    <div
-                      key={step}
-                      className={`px-3 py-1.5 rounded-lg text-xs font-medium border ${
-                        u.debuted || u.completedStepCount >= step
-                          ? "bg-indigo-600 text-white border-indigo-600"
-                          : "bg-white text-gray-400 border-gray-200"
-                      }`}
-                    >
-                      STEP {step}
-                    </div>
+                  {ROADMAP_STEPS.map((step, i) => (
+                    <StepBadge
+                      key={step.id}
+                      step={i + 1}
+                      label={step.label}
+                      completed={u.debuted || u.completedStepCount > i}
+                    />
                   ))}
                   {u.debuted && (
                     <div className="px-3 py-1.5 rounded-lg text-xs font-medium bg-green-100 text-green-700 border border-green-300">
@@ -259,14 +303,20 @@ function AppointerExpandRow({ user: u }: { user: UserRecord }) {
                   )}
                 </div>
               </div>
-              {u.amMemo ? (
+              {u.amMemo && (
                 <div>
                   <p className="text-xs font-semibold text-gray-700 mb-1">AMのメモ</p>
                   <p className="text-xs text-gray-600 bg-white rounded-lg border p-3 whitespace-pre-wrap">{u.amMemo}</p>
                 </div>
-              ) : (
-                <p className="text-xs text-gray-400">AMのメモはありません</p>
               )}
+              <div>
+                <p className="text-xs font-semibold text-gray-700 mb-1">営業マンのメモ</p>
+                <SalesMemoEditor
+                  userId={u.id}
+                  initialValue={u.salesMemo}
+                  onSaved={(v) => onMemoSaved(u.id, v)}
+                />
+              </div>
             </div>
           )}
 
@@ -303,7 +353,7 @@ function AppointerExpandRow({ user: u }: { user: UserRecord }) {
 // ────────────────────────────────────────────
 // タブ付き展開行（AM用）
 // ────────────────────────────────────────────
-function AMExpandRow({ user: u }: { user: UserRecord }) {
+function AMExpandRow({ user: u, onMemoSaved }: { user: UserRecord; onMemoSaved: (id: string, memo: string) => void }) {
   const [open, setOpen] = useState(false);
   const [tab, setTab] = useState<"status" | "eval" | "profile">("status");
 
@@ -366,28 +416,31 @@ function AMExpandRow({ user: u }: { user: UserRecord }) {
               <div>
                 <p className="text-xs font-semibold text-gray-700 mb-2">ステップ進捗</p>
                 <div className="flex gap-1.5 flex-wrap">
-                  {Array.from({ length: AM_TOTAL_STEPS }, (_, i) => i + 1).map((step) => (
-                    <div
-                      key={step}
-                      className={`px-3 py-1.5 rounded-lg text-xs font-medium border ${
-                        u.completedStepCount >= step
+                  {Array.from({ length: AM_TOTAL_STEPS }, (_, i) => (
+                    <div key={i} className="relative group">
+                      <div className={`px-3 py-1.5 rounded-lg text-xs font-medium border cursor-default select-none ${
+                        u.completedStepCount > i
                           ? "bg-indigo-600 text-white border-indigo-600"
                           : "bg-white text-gray-400 border-gray-200"
-                      }`}
-                    >
-                      STEP {step}
+                      }`}>
+                        STEP {i + 1}
+                      </div>
+                      <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 hidden group-hover:block z-20 w-36 bg-gray-800 text-white text-xs rounded-lg px-2.5 py-2 text-center pointer-events-none shadow-lg">
+                        <p className="font-semibold">STEP {i + 1}</p>
+                        <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-gray-800" />
+                      </div>
                     </div>
                   ))}
                 </div>
               </div>
-              {u.amMemo ? (
-                <div>
-                  <p className="text-xs font-semibold text-gray-700 mb-1">メモ</p>
-                  <p className="text-xs text-gray-600 bg-white rounded-lg border p-3 whitespace-pre-wrap">{u.amMemo}</p>
-                </div>
-              ) : (
-                <p className="text-xs text-gray-400">メモはありません</p>
-              )}
+              <div>
+                <p className="text-xs font-semibold text-gray-700 mb-1">営業マンのメモ <span className="text-gray-400 font-normal">（同チームの営業マン・管理者のみ表示）</span></p>
+                <SalesMemoEditor
+                  userId={u.id}
+                  initialValue={u.salesMemo}
+                  onSaved={(v) => onMemoSaved(u.id, v)}
+                />
+              </div>
             </div>
           )}
 
@@ -604,7 +657,11 @@ export default function HRPage() {
               ) : (
                 <div>
                   {appointers.map((u) => (
-                    <AppointerExpandRow key={u.id} user={u} />
+                    <AppointerExpandRow
+                      key={u.id}
+                      user={u}
+                      onMemoSaved={(id, memo) => setUsers((prev) => prev.map((p) => p.id === id ? { ...p, salesMemo: memo } : p))}
+                    />
                   ))}
                 </div>
               )}
@@ -623,7 +680,11 @@ export default function HRPage() {
               <CardContent className="p-0">
                 <div>
                   {ams.map((u) => (
-                    <AMExpandRow key={u.id} user={u} />
+                    <AMExpandRow
+                      key={u.id}
+                      user={u}
+                      onMemoSaved={(id, memo) => setUsers((prev) => prev.map((p) => p.id === id ? { ...p, salesMemo: memo } : p))}
+                    />
                   ))}
                 </div>
               </CardContent>

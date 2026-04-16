@@ -68,10 +68,10 @@ export async function GET() {
 
   const { data: users } = await usersQuery;
 
-  // ロードマップ（am_memo含む）
+  // ロードマップ（am_memo・sales_memo含む）
   const { data: roadmaps } = await supabaseAdmin
     .from("roadmaps")
-    .select("user_id, completed_step_count, am_memo");
+    .select("user_id, completed_step_count, am_memo, sales_memo");
 
   // 今月・前月の実績
   const { data: currPerf } = await supabaseAdmin
@@ -127,7 +127,8 @@ export async function GET() {
       dmCount:              perf?.dm_count         ?? 0,
       bSetCount:            perf?.appo_count        ?? 0,
       bSetRate:             perf?.appointment_rate != null ? Number(perf.appointment_rate) : null,
-      amMemo:               roadmap?.am_memo        ?? "",
+      amMemo:               roadmap?.am_memo         ?? "",
+      salesMemo:            roadmap?.sales_memo      ?? "",
       amName:               u.education_mentor_user_id ? (amMap.get(u.education_mentor_user_id) ?? null) : null,
     };
   });
