@@ -167,7 +167,7 @@ export default function AppointerPage() {
         )}
 
         {/* 人事評価結果（管理者が公開した場合のみ表示） */}
-        <EvaluationResult role="Appointer" />
+        <EvaluationResult />
 
       </div>
     </PageLayout>

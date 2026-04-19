@@ -217,21 +217,6 @@ function AppointerDetail({
             <p className="text-xs text-gray-400 text-center py-4">評価結果はまだ公開されていません</p>
           ) : (
             <>
-              {/* 定量（稼働量・成果） */}
-              {(evalData.workload_score != null || evalData.performance_score != null) && (
-                <div className="grid grid-cols-2 gap-2">
-                  <div className="bg-white rounded-lg border p-3 text-center">
-                    <p className="text-xs text-gray-500 mb-1">稼働量</p>
-                    {evalData.dm_count != null && <p className="text-xs text-gray-400">DM: {evalData.dm_count.toLocaleString()}通</p>}
-                    <ScorePill score={evalData.workload_score} />
-                  </div>
-                  <div className="bg-white rounded-lg border p-3 text-center">
-                    <p className="text-xs text-gray-500 mb-1">成果</p>
-                    {evalData.b_set_rate != null && <p className="text-xs text-gray-400">B設定率: {Number(evalData.b_set_rate).toFixed(2)}%</p>}
-                    <ScorePill score={evalData.performance_score} />
-                  </div>
-                </div>
-              )}
               {/* レーダーチャート */}
               {radarData.length > 0 && (
                 <>
@@ -442,9 +427,61 @@ export default function AppointerManagePage() {
   const { nickname, name, image, role, team } = session?.user ?? {};
   const userName = nickname ?? name ?? "AM";
 
+  // ─── サマリー集計 ──────────────────────────────────────────────────
+  const totalCount   = members.length;
+  const debutedCount = members.filter((u) => (roadmaps[u.id]?.completedStepCount ?? 0) >= 6).length;
+  const preDebutCount = members.filter((u) => {
+    const rm = roadmaps[u.id];
+    return rm && rm.completedStepCount < 6;
+  }).length;
+  // STEPごとの人数（completedStepCount === i → STEPi+1 に在籍）
+  const stepCounts = Array.from({ length: 6 }, (_, i) =>
+    members.filter((u) => (roadmaps[u.id]?.completedStepCount ?? -1) === i).length
+  );
+
   return (
     <PageLayout title="アポインター管理" role={role ?? "AM"} userName={userName} userImage={image} userTeam={team}>
       <div className="space-y-4">
+
+        {/* サマリーカード */}
+        {members.length > 0 && (
+          <div className="bg-white rounded-2xl border p-4">
+            <div className="grid grid-cols-2 gap-4">
+              {/* 左：人数サマリー */}
+              <div className="space-y-2">
+                {[
+                  { label: "アポインター総数", value: totalCount,    suffix: "名" },
+                  { label: "デビュー済み",      value: debutedCount,  suffix: "名" },
+                  { label: "デビュー前",        value: preDebutCount, suffix: "名" },
+                  { label: "当月離脱",          value: 0,             suffix: "名" },
+                ].map(({ label, value, suffix }) => (
+                  <div key={label} className="flex items-center justify-between">
+                    <span className="text-xs text-gray-500">{label}</span>
+                    <span className="text-sm font-bold text-gray-800">{value}<span className="text-xs font-normal text-gray-400 ml-0.5">{suffix}</span></span>
+                  </div>
+                ))}
+              </div>
+              {/* 右：STEPブレークダウン */}
+              <div className="space-y-2">
+                {ROADMAP_STEPS.map((step, i) => (
+                  <div key={step.id} className="relative group flex items-center justify-between">
+                    <div className="flex items-center gap-1">
+                      <span className="text-xs text-gray-500 cursor-default">STEP{i + 1}</span>
+                      {/* ツールチップ */}
+                      <div className="absolute left-0 bottom-full mb-1.5 hidden group-hover:block z-20 w-44 bg-gray-800 text-white text-xs rounded-lg px-2.5 py-2 pointer-events-none shadow-lg">
+                        <p className="font-semibold mb-0.5">STEP {i + 1}</p>
+                        <p className="text-gray-300">{step.label}</p>
+                        <div className="absolute top-full left-4 border-4 border-transparent border-t-gray-800" />
+                      </div>
+                    </div>
+                    <span className="text-sm font-bold text-gray-800">{stepCounts[i]}<span className="text-xs font-normal text-gray-400 ml-0.5">名</span></span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+
         <div className="flex items-center justify-between">
           <p className="text-xs text-gray-400">{thisYear}年{thisMonth}月 — 管轄メンバー（{members.length}名）</p>
           {members.length === 0 && (

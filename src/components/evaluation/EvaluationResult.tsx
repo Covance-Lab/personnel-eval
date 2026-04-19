@@ -24,32 +24,7 @@ interface EvalData {
   thinking_other: number | null;
 }
 
-const SCORE_LABELS: Record<number, { label: string; color: string }> = {
-  5: { label: "5点 よくできている",      color: "text-green-600" },
-  4: { label: "4点 まあまあできている",   color: "text-blue-600" },
-  3: { label: "3点 人並みにできている",   color: "text-yellow-600" },
-  2: { label: "2点 あまりできていない",   color: "text-orange-600" },
-  1: { label: "1点 全くできていない",     color: "text-red-600" },
-};
-
-function QuantScore({ label, score, sub }: { label: string; score: number | null; sub?: string }) {
-  if (score == null) return null;
-  const info = SCORE_LABELS[score];
-  return (
-    <div className="bg-white rounded-xl border p-4 space-y-1">
-      <p className="text-xs text-gray-500">{label}</p>
-      {sub && <p className="text-xs text-gray-400">{sub}</p>}
-      <div className={`text-2xl font-bold ${info?.color ?? "text-gray-700"}`}>{score}<span className="text-sm font-normal text-gray-400 ml-0.5">点</span></div>
-      <p className="text-xs text-gray-500">{info?.label.replace(/^\d点 /, "")}</p>
-    </div>
-  );
-}
-
-interface EvaluationResultProps {
-  role: "Appointer" | "AM";
-}
-
-export default function EvaluationResult({ role }: EvaluationResultProps) {
+export default function EvaluationResult() {
   const [data, setData] = useState<EvalData | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -71,11 +46,7 @@ export default function EvaluationResult({ role }: EvaluationResultProps) {
   const now = new Date();
   const year  = now.getFullYear();
   const month = now.getMonth() + 1;
-  // 前月ラベル
-  const prevDate  = new Date(year, month - 2, 1);
-  const prevLabel = `${prevDate.getFullYear()}年${prevDate.getMonth() + 1}月`;
 
-  // Appointer: 6軸（稼働量・成果は同値で重ねる）、AM: 4軸（定性のみ）
   const qualitativeItems = [
     { subject: "規律",     自己評価: data.discipline_self,   他者評価: data.discipline_other   != null ? +Number(data.discipline_other).toFixed(1)   : null },
     { subject: "吸収力",   自己評価: data.absorption_self,   他者評価: data.absorption_other   != null ? +Number(data.absorption_other).toFixed(1)   : null },
@@ -83,7 +54,6 @@ export default function EvaluationResult({ role }: EvaluationResultProps) {
     { subject: "思考力",   自己評価: data.thinking_self,     他者評価: data.thinking_other     != null ? +Number(data.thinking_other).toFixed(1)     : null },
   ];
 
-  // 常に6軸（稼働量・成果はAppointerのみ値あり、AMは0で表示）
   const radarData = [
     { subject: "稼働量", 自己評価: data.workload_score    ?? 0, 他者評価: data.workload_score    ?? 0 },
     { subject: "成果",   自己評価: data.performance_score ?? 0, 他者評価: data.performance_score ?? 0 },
@@ -103,29 +73,10 @@ export default function EvaluationResult({ role }: EvaluationResultProps) {
       </CardHeader>
       <CardContent className="space-y-5">
 
-        {/* 定量評価（Appointerのみ） */}
-        {role === "Appointer" && (data.workload_score != null || data.performance_score != null) && (
-          <div className="space-y-2">
-            <p className="text-xs font-semibold text-gray-700">定量評価（{prevLabel}実績）</p>
-            <div className="grid grid-cols-2 gap-3">
-              <QuantScore
-                label="稼働量"
-                score={data.workload_score}
-                sub={data.dm_count != null ? `DM数: ${data.dm_count.toLocaleString()}通` : undefined}
-              />
-              <QuantScore
-                label="成果"
-                score={data.performance_score}
-                sub={data.b_set_rate != null ? `B設定率: ${Number(data.b_set_rate).toFixed(2)}%` : undefined}
-              />
-            </div>
-          </div>
-        )}
-
-        {/* 定性評価レーダーチャート */}
+        {/* 評価レーダーチャート */}
         {hasRadar && (
           <div className="space-y-2">
-            <p className="text-xs font-semibold text-gray-700">定性評価（アンケート結果）</p>
+            <p className="text-xs font-semibold text-gray-700">評価結果（アンケート結果）</p>
             <p className="text-xs text-gray-400">
               <span className="text-indigo-500 font-medium">■ 自己評価</span>
               　<span className="text-pink-500 font-medium">■ 他者評価</span>（AM・営業マンの平均）
