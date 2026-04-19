@@ -71,17 +71,21 @@ export async function POST(req: NextRequest) {
   // タブ名: "MM月"
   const sheetName = `${String(month).padStart(2, "0")}月`;
 
-  // A17:U1000 でデータ行を取得
+  // A17:U1000 でデータ行を取得 + F7（全体DM数）・F8（全体B設定数）を取得
   let rows: string[][];
   let isMock = false;
+  let overallDmCount = 0;
+  let overallBSetFromSheet = 0;
   try {
-    const result = await fetchSheetRange({
-      spreadsheetId: cfg.spreadsheet_id,
-      sheetName,
-      range: "A17:U1000",
-    });
-    rows = result.rows;
-    isMock = result.isMock;
+    const [dataResult, summaryResult] = await Promise.all([
+      fetchSheetRange({ spreadsheetId: cfg.spreadsheet_id, sheetName, range: "A17:U1000" }),
+      fetchSheetRange({ spreadsheetId: cfg.spreadsheet_id, sheetName, range: "F7:F8" }),
+    ]);
+    rows = dataResult.rows;
+    isMock = dataResult.isMock;
+    // F7 = DM総計, F8 = B設定総計（ともに数値セル）
+    overallDmCount       = parseInt((summaryResult.rows[0]?.[0] ?? "").replace(/[,，]/g, "")) || 0;
+    overallBSetFromSheet = parseInt((summaryResult.rows[1]?.[0] ?? "").replace(/[,，]/g, "")) || 0;
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
     return NextResponse.json({ error: message }, { status: 500 });
@@ -121,7 +125,9 @@ export async function POST(req: NextRequest) {
     year,
     month,
     team,
-    b_set_count:    bSetCount,
+    // 全体行はシートF7/F8の値を優先、チーム行はdm_countなし
+    ...(team === "全体" && overallDmCount > 0 ? { dm_count: overallDmCount } : {}),
+    b_set_count:    team === "全体" && overallBSetFromSheet > 0 ? overallBSetFromSheet : bSetCount,
     b_exec_count:   bExecCount,
     a_set_count:    aSetCount,
     a_exec_count:   aExecCount,

@@ -77,12 +77,20 @@ function SalesMemoEditor({ userId, initialValue, onSaved }: { userId: string; in
       <textarea
         value={value}
         onChange={(e) => setValue(e.target.value)}
-        onBlur={save}
         rows={3}
         placeholder="メモを入力..."
         className="w-full text-xs rounded-lg border border-gray-200 p-2.5 resize-none focus:outline-none focus:ring-1 focus:ring-indigo-400 bg-white"
       />
-      {saving && <p className="text-xs text-gray-400">保存中...</p>}
+      <div className="flex items-center justify-between">
+        {saving ? <p className="text-xs text-gray-400">保存中...</p> : <span />}
+        <button
+          onClick={save}
+          disabled={saving || value === initialValue}
+          className="px-3 py-1 text-xs font-medium rounded-lg bg-indigo-600 text-white disabled:opacity-40 disabled:cursor-not-allowed hover:bg-indigo-700 transition-colors"
+        >
+          保存
+        </button>
+      </div>
     </div>
   );
 }
@@ -150,20 +158,6 @@ function EvalPanel({ userId }: { userId: string }) {
 
   return (
     <div className="space-y-3">
-      {(eval_.workload_score != null || eval_.performance_score != null) && (
-        <div className="grid grid-cols-2 gap-2">
-          {[
-            { label: "稼働量", score: eval_.workload_score, sub: eval_.dm_count != null ? `DM: ${eval_.dm_count}通` : undefined },
-            { label: "成果",   score: eval_.performance_score, sub: eval_.b_set_rate != null ? `B設定率: ${Number(eval_.b_set_rate).toFixed(2)}%` : undefined },
-          ].map(({ label, score, sub }) => score != null && (
-            <div key={label} className="bg-white rounded-lg border p-2 text-center">
-              <p className="text-xs text-gray-500">{label}</p>
-              {sub && <p className="text-xs text-gray-400">{sub}</p>}
-              <p className="text-xl font-bold text-indigo-600">{score}<span className="text-xs text-gray-400 ml-0.5">点</span></p>
-            </div>
-          ))}
-        </div>
-      )}
       <p className="text-xs text-gray-400">
         <span className="text-indigo-500 font-medium">■ 自己</span>
         　<span className="text-pink-500 font-medium">■ 他者</span>
@@ -188,6 +182,8 @@ function EvalPanel({ userId }: { userId: string }) {
           </thead>
           <tbody className="divide-y">
             {[
+              { label: "稼働量",   s: eval_.workload_score,    o: eval_.workload_score },
+              { label: "成果",     s: eval_.performance_score, o: eval_.performance_score },
               { label: "規律",    s: eval_.discipline_self,   o: eval_.discipline_other },
               { label: "吸収力",  s: eval_.absorption_self,   o: eval_.absorption_other },
               { label: "組織貢献", s: eval_.contribution_self, o: eval_.contribution_other },
@@ -195,8 +191,8 @@ function EvalPanel({ userId }: { userId: string }) {
             ].map(({ label, s, o }) => (
               <tr key={label}>
                 <td className="px-3 py-1.5 font-medium text-gray-700">{label}</td>
-                <td className="px-3 py-1.5 text-center text-indigo-600 font-semibold">{s ?? "—"}</td>
-                <td className="px-3 py-1.5 text-center text-pink-600 font-semibold">{o != null ? Number(o).toFixed(1) : "—"}</td>
+                <td className="px-3 py-1.5 text-center text-indigo-600 font-semibold">{s != null ? s : "—"}</td>
+                <td className="px-3 py-1.5 text-center text-pink-600 font-semibold">{o != null ? (Number.isInteger(Number(o)) ? o : Number(o).toFixed(1)) : "—"}</td>
               </tr>
             ))}
           </tbody>
@@ -578,66 +574,48 @@ export default function HRPage() {
       <PageLayout title="アポインター管理" role={role ?? "Sales"} userName={userName} userImage={image} userTeam={team}>
         <div className="space-y-6">
 
-          {/* サマリーカード */}
+          {/* サマリー：2列レイアウト */}
           {summary && (
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-              <Card>
-                <CardContent className="pt-4 pb-4">
-                  <div className="flex items-center gap-2 mb-1">
-                    <Users className="w-4 h-4 text-gray-400" />
-                    <p className="text-xs text-gray-500">アポインター総数</p>
-                  </div>
-                  <p className="text-3xl font-bold">{summary.total}<span className="text-base font-normal text-gray-500 ml-1">人</span></p>
-                </CardContent>
-              </Card>
-              <Card>
-                <CardContent className="pt-4 pb-4">
-                  <div className="flex items-center gap-2 mb-1">
-                    <UserCheck className="w-4 h-4 text-green-500" />
-                    <p className="text-xs text-gray-500">デビュー済み</p>
-                  </div>
-                  <p className="text-3xl font-bold text-green-600">{summary.debuted}<span className="text-base font-normal text-gray-500 ml-1">人</span></p>
-                </CardContent>
-              </Card>
-              <Card>
-                <CardContent className="pt-4 pb-4">
-                  <div className="flex items-center gap-2 mb-1">
-                    <TrendingUp className="w-4 h-4 text-indigo-500" />
-                    <p className="text-xs text-gray-500">デビュー前</p>
-                  </div>
-                  <p className="text-3xl font-bold text-indigo-600">
-                    {summary.preDebut.reduce((s, p) => s + p.count, 0)}
-                    <span className="text-base font-normal text-gray-500 ml-1">人</span>
-                  </p>
-                </CardContent>
-              </Card>
-              <Card>
-                <CardContent className="pt-4 pb-4">
-                  <div className="flex items-center gap-2 mb-1">
-                    <UserX className="w-4 h-4 text-red-400" />
-                    <p className="text-xs text-gray-500">当月離脱</p>
-                  </div>
-                  <p className="text-3xl font-bold text-red-500">{summary.churned}<span className="text-base font-normal text-gray-500 ml-1">人</span></p>
-                </CardContent>
-              </Card>
-            </div>
-          )}
-
-          {/* デビュー前ステップ内訳 */}
-          {summary && summary.preDebut.some((p) => p.count > 0) && (
             <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-sm font-semibold text-gray-700">デビュー前 — ステップ別人数</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="flex flex-wrap gap-3">
-                  {summary.preDebut.filter((p) => p.count > 0).map(({ step, count }) => (
-                    <div key={step} className="flex items-center gap-2 bg-gray-50 rounded-lg px-3 py-2 border">
-                      <span className="text-xs font-medium text-gray-500">{STEP_LABELS[step] ?? `STEP ${step}`}</span>
-                      <span className="text-lg font-bold text-indigo-600">{count}</span>
-                      <span className="text-xs text-gray-400">人</span>
-                    </div>
-                  ))}
+              <CardContent className="pt-4 pb-4">
+                <div className="grid grid-cols-2 gap-4">
+                  {/* 左列：ステータス別 */}
+                  <div className="space-y-2">
+                    {[
+                      { icon: <Users className="w-3.5 h-3.5 text-gray-400" />, label: "アポインター総数", value: summary.total, color: "text-gray-800" },
+                      { icon: <UserCheck className="w-3.5 h-3.5 text-green-500" />, label: "デビュー済み", value: summary.debuted, color: "text-green-600" },
+                      { icon: <TrendingUp className="w-3.5 h-3.5 text-indigo-500" />, label: "デビュー前", value: summary.preDebut.reduce((s, p) => s + p.count, 0), color: "text-indigo-600" },
+                      { icon: <UserX className="w-3.5 h-3.5 text-red-400" />, label: "当月離脱", value: summary.churned, color: "text-red-500" },
+                    ].map(({ icon, label, value, color }) => (
+                      <div key={label} className="flex items-center justify-between bg-gray-50 rounded-lg px-3 py-2 border">
+                        <div className="flex items-center gap-1.5">
+                          {icon}
+                          <span className="text-xs text-gray-500">{label}</span>
+                        </div>
+                        <span className={`text-lg font-bold ${color}`}>{value}<span className="text-xs font-normal text-gray-400 ml-0.5">人</span></span>
+                      </div>
+                    ))}
+                  </div>
+                  {/* 右列：STEP別（ツールチップ付き） */}
+                  <div className="space-y-2">
+                    {summary.preDebut.map(({ step, count }) => {
+                      const stepLabel  = step === 0 ? "未着手" : `STEP${step}`;
+                      const stepDetail = step >= 1 ? (ROADMAP_STEPS[step - 1]?.label ?? "") : "";
+                      return (
+                        <div key={step} className="relative group flex items-center justify-between bg-gray-50 rounded-lg px-3 py-2 border cursor-default">
+                          <span className="text-xs text-gray-500">{stepLabel}</span>
+                          <span className="text-lg font-bold text-indigo-600">{count}<span className="text-xs font-normal text-gray-400 ml-0.5">人</span></span>
+                          {stepDetail && (
+                            <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 hidden group-hover:block z-20 w-44 bg-gray-800 text-white text-xs rounded-lg px-2.5 py-2 text-center pointer-events-none shadow-lg">
+                              <p className="font-semibold mb-0.5">{stepLabel}</p>
+                              <p className="text-gray-300">{stepDetail}</p>
+                              <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-gray-800" />
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
               </CardContent>
             </Card>
@@ -736,14 +714,25 @@ export default function HRPage() {
                     </div>
                   ))}
                 </div>
-                {/* 右列：STEP別 */}
+                {/* 右列：STEP別（ツールチップ付き） */}
                 <div className="space-y-2">
-                  {summary.preDebut.map(({ step, count }) => (
-                    <div key={step} className="flex items-center justify-between bg-gray-50 rounded-lg px-3 py-2 border">
-                      <span className="text-xs text-gray-500">{step === 0 ? "未着手" : `STEP ${step}`}</span>
-                      <span className="text-lg font-bold text-indigo-600">{count}<span className="text-xs font-normal text-gray-400 ml-0.5">人</span></span>
-                    </div>
-                  ))}
+                  {summary.preDebut.map(({ step, count }) => {
+                    const stepLabel  = step === 0 ? "未着手" : `STEP${step}`;
+                    const stepDetail = step >= 1 ? (ROADMAP_STEPS[step - 1]?.label ?? "") : "";
+                    return (
+                      <div key={step} className="relative group flex items-center justify-between bg-gray-50 rounded-lg px-3 py-2 border cursor-default">
+                        <span className="text-xs text-gray-500">{stepLabel}</span>
+                        <span className="text-lg font-bold text-indigo-600">{count}<span className="text-xs font-normal text-gray-400 ml-0.5">人</span></span>
+                        {stepDetail && (
+                          <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 hidden group-hover:block z-20 w-44 bg-gray-800 text-white text-xs rounded-lg px-2.5 py-2 text-center pointer-events-none shadow-lg">
+                            <p className="font-semibold mb-0.5">{stepLabel}</p>
+                            <p className="text-gray-300">{stepDetail}</p>
+                            <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-gray-800" />
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             </CardContent>

@@ -446,35 +446,42 @@ export default function AppointerManagePage() {
         {/* サマリーカード */}
         {members.length > 0 && (
           <div className="bg-white rounded-2xl border p-4">
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-2 gap-3">
               {/* 左：人数サマリー */}
               <div className="space-y-2">
                 {[
-                  { label: "アポインター総数", value: totalCount,    suffix: "名" },
-                  { label: "デビュー済み",      value: debutedCount,  suffix: "名" },
-                  { label: "デビュー前",        value: preDebutCount, suffix: "名" },
-                  { label: "当月離脱",          value: 0,             suffix: "名" },
-                ].map(({ label, value, suffix }) => (
-                  <div key={label} className="flex items-center justify-between">
+                  { label: "アポインター総数", value: totalCount,    color: "text-gray-800" },
+                  { label: "デビュー済み",      value: debutedCount,  color: "text-green-600" },
+                  { label: "デビュー前",        value: preDebutCount, color: "text-indigo-600" },
+                  { label: "当月離脱",          value: 0,             color: "text-red-500" },
+                ].map(({ label, value, color }) => (
+                  <div key={label} className="flex items-center justify-between bg-gray-50 rounded-lg px-3 py-2 border">
                     <span className="text-xs text-gray-500">{label}</span>
-                    <span className="text-sm font-bold text-gray-800">{value}<span className="text-xs font-normal text-gray-400 ml-0.5">{suffix}</span></span>
+                    <span className={`text-lg font-bold ${color}`}>{value}<span className="text-xs font-normal text-gray-400 ml-0.5">人</span></span>
                   </div>
                 ))}
               </div>
-              {/* 右：STEPブレークダウン */}
+              {/* 右：未着手 + STEP1-6（ツールチップ付き） */}
               <div className="space-y-2">
+                {/* 未着手：ロードマップ未登録 */}
+                <div className="flex items-center justify-between bg-gray-50 rounded-lg px-3 py-2 border">
+                  <span className="text-xs text-gray-500">未着手</span>
+                  <span className="text-lg font-bold text-indigo-600">
+                    {members.filter((u) => !roadmaps[u.id]).length}
+                    <span className="text-xs font-normal text-gray-400 ml-0.5">人</span>
+                  </span>
+                </div>
                 {ROADMAP_STEPS.map((step, i) => (
-                  <div key={step.id} className="relative group flex items-center justify-between">
-                    <div className="flex items-center gap-1">
-                      <span className="text-xs text-gray-500 cursor-default">STEP{i + 1}</span>
-                      {/* ツールチップ */}
-                      <div className="absolute left-0 bottom-full mb-1.5 hidden group-hover:block z-20 w-44 bg-gray-800 text-white text-xs rounded-lg px-2.5 py-2 pointer-events-none shadow-lg">
-                        <p className="font-semibold mb-0.5">STEP {i + 1}</p>
-                        <p className="text-gray-300">{step.label}</p>
-                        <div className="absolute top-full left-4 border-4 border-transparent border-t-gray-800" />
-                      </div>
+                  <div key={step.id} className="relative group flex items-center justify-between bg-gray-50 rounded-lg px-3 py-2 border cursor-default">
+                    <span className="text-xs text-gray-500">STEP{i + 1}</span>
+                    <span className="text-lg font-bold text-indigo-600">
+                      {stepCounts[i]}<span className="text-xs font-normal text-gray-400 ml-0.5">人</span>
+                    </span>
+                    <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 hidden group-hover:block z-20 w-44 bg-gray-800 text-white text-xs rounded-lg px-2.5 py-2 text-center pointer-events-none shadow-lg">
+                      <p className="font-semibold mb-0.5">STEP {i + 1}</p>
+                      <p className="text-gray-300">{step.label}</p>
+                      <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-gray-800" />
                     </div>
-                    <span className="text-sm font-bold text-gray-800">{stepCounts[i]}<span className="text-xs font-normal text-gray-400 ml-0.5">名</span></span>
                   </div>
                 ))}
               </div>

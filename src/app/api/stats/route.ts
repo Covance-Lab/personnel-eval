@@ -128,17 +128,17 @@ export async function GET(req: NextRequest) {
       .or(trendOr),
     supabaseAdmin
       .from("team_monthly_aggregates")
-      .select("team, b_set_count, b_exec_count, a_set_count, a_exec_count, contract_count")
+      .select("team, dm_count, b_set_count, b_exec_count, a_set_count, a_exec_count, contract_count")
       .eq("year", year)
       .eq("month", month),
     supabaseAdmin
       .from("team_monthly_aggregates")
-      .select("team, b_set_count, b_exec_count, a_set_count, a_exec_count, contract_count")
+      .select("team, dm_count, b_set_count, b_exec_count, a_set_count, a_exec_count, contract_count")
       .eq("year", prevYear)
       .eq("month", prevMonth),
     supabaseAdmin
       .from("team_monthly_aggregates")
-      .select("year, month, team, b_set_count, b_exec_count, a_set_count, a_exec_count, contract_count")
+      .select("year, month, team, dm_count, b_set_count, b_exec_count, a_set_count, a_exec_count, contract_count")
       .or(trendOr),
   ]);
 
@@ -154,16 +154,17 @@ export async function GET(req: NextRequest) {
   // チーム別集計トレンドマップ: "year-month" → team → counts
   const teamAggTrendRows = teamAggTrendRes.data ?? [];
   const teamAggByMonth = new Map<string, Record<string, {
-    bSetCount: number; bExecCount: number; aSetCount: number; aExecCount: number; contractCount: number;
+    dmCount?: number; bSetCount: number; bExecCount: number; aSetCount: number; aExecCount: number; contractCount: number;
   }>>();
   for (const r of teamAggTrendRows) {
     const key = `${r.year}-${r.month}`;
     if (!teamAggByMonth.has(key)) teamAggByMonth.set(key, {});
     teamAggByMonth.get(key)![r.team] = {
-      bSetCount:    r.b_set_count    ?? 0,
-      bExecCount:   r.b_exec_count   ?? 0,
-      aSetCount:    r.a_set_count    ?? 0,
-      aExecCount:   r.a_exec_count   ?? 0,
+      dmCount:       r.dm_count      != null ? r.dm_count : undefined,
+      bSetCount:     r.b_set_count    ?? 0,
+      bExecCount:    r.b_exec_count   ?? 0,
+      aSetCount:     r.a_set_count    ?? 0,
+      aExecCount:    r.a_exec_count   ?? 0,
       contractCount: r.contract_count ?? 0,
     };
   }
@@ -193,15 +194,16 @@ export async function GET(req: NextRequest) {
   // チーム別集計データをマップ化
   function toTeamAggMap(rows: typeof teamAggCurrRes.data) {
     const map = new Map<string, {
-      bSetCount: number; bExecCount: number;
+      dmCount?: number; bSetCount: number; bExecCount: number;
       aSetCount: number; aExecCount: number; contractCount: number;
     }>();
     for (const r of rows ?? []) {
       map.set(r.team, {
-        bSetCount:    r.b_set_count    ?? 0,
-        bExecCount:   r.b_exec_count   ?? 0,
-        aSetCount:    r.a_set_count    ?? 0,
-        aExecCount:   r.a_exec_count   ?? 0,
+        dmCount:       r.dm_count      != null ? r.dm_count : undefined,
+        bSetCount:     r.b_set_count    ?? 0,
+        bExecCount:    r.b_exec_count   ?? 0,
+        aSetCount:     r.a_set_count    ?? 0,
+        aExecCount:    r.a_exec_count   ?? 0,
         contractCount: r.contract_count ?? 0,
       });
     }
