@@ -26,6 +26,14 @@ interface Aggregate {
   contractCount: number;
   revenue: number;
 }
+interface TeamAgg {
+  bSetCount:     number;
+  bExecCount:    number;
+  aSetCount:     number;
+  aExecCount:    number;
+  contractCount: number;
+}
+
 interface TrendPoint {
   label: string;
   year: number;
@@ -127,7 +135,7 @@ function OverallCard({
     const { label, curr: c, prev: p, suffix, noAgg, money } = item;
     return (
       <div className={`rounded-xl border p-3 space-y-1 ${noAgg ? "opacity-40 bg-gray-50" : "bg-white"}`}>
-        <p className="text-xs text-gray-500">{label}</p>
+        <p className="text-sm font-semibold text-gray-700">{label}</p>
         <p className="text-xl font-bold leading-none">
           {money ? `¥${c.toLocaleString()}` : c.toLocaleString()}
           {!money && <span className="text-xs font-normal text-gray-400 ml-0.5">{suffix}</span>}
@@ -194,6 +202,88 @@ function TeamCard({
                   <Diff curr={cv} prev={pv} suffix={suffix} />
                 </div>
               </div>
+            </div>
+          ))}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+// ─── チーム全パイプラインカード（B実施〜契約含む） ─────────────────────────
+function TeamPipelineCard({
+  team, curr, prev, currAgg, prevAgg,
+}: {
+  team: string;
+  curr: TeamStats | null;
+  prev: TeamStats | null;
+  currAgg: TeamAgg | null;
+  prevAgg: TeamAgg | null;
+}) {
+  const c  = curr  ?? { appointerCount: 0, dmCount: 0, bSetCount: 0, bSetRate: 0, team };
+  const p  = prev  ?? { appointerCount: 0, dmCount: 0, bSetCount: 0, bSetRate: 0, team };
+  const ca = currAgg  ?? null;
+  const pa = prevAgg  ?? null;
+
+  const bSetC = ca?.bSetCount ?? c.bSetCount;
+  const bSetP = pa?.bSetCount ?? p.bSetCount;
+
+  const bSetRateC  = c.dmCount   > 0 ? Math.round((bSetC / c.dmCount) * 1000) / 10 : 0;
+  const bSetRateP  = p.dmCount   > 0 ? Math.round((bSetP / p.dmCount) * 1000) / 10 : 0;
+  const bExecRateC = bSetC       > 0 ? Math.round(((ca?.bExecCount ?? 0) / bSetC) * 1000) / 10 : 0;
+  const bExecRateP = bSetP       > 0 ? Math.round(((pa?.bExecCount ?? 0) / bSetP) * 1000) / 10 : 0;
+  const aSetRateC  = (ca?.bExecCount ?? 0) > 0 ? Math.round(((ca?.aSetCount ?? 0) / ca!.bExecCount) * 1000) / 10 : 0;
+  const aSetRateP  = (pa?.bExecCount ?? 0) > 0 ? Math.round(((pa?.aSetCount ?? 0) / pa!.bExecCount) * 1000) / 10 : 0;
+  const aExecRateC = (ca?.aSetCount ?? 0) > 0 ? Math.round(((ca?.aExecCount ?? 0) / ca!.aSetCount) * 1000) / 10 : 0;
+  const aExecRateP = (pa?.aSetCount ?? 0) > 0 ? Math.round(((pa?.aExecCount ?? 0) / pa!.aSetCount) * 1000) / 10 : 0;
+  const contractRateC = (ca?.aExecCount ?? 0) > 0 ? Math.round(((ca?.contractCount ?? 0) / ca!.aExecCount) * 1000) / 10 : 0;
+  const contractRateP = (pa?.aExecCount ?? 0) > 0 ? Math.round(((pa?.contractCount ?? 0) / pa!.aExecCount) * 1000) / 10 : 0;
+
+  const color = TEAM_COLOR[team] ?? "#6366f1";
+
+  type Row = [{ label: string; curr: number; prev: number; suffix: string }, { label: string; curr: number; prev: number; suffix: string } | null];
+  const rows: Row[] = [
+    [{ label: "DM",    curr: c.dmCount, prev: p.dmCount, suffix: "件" }, null],
+    [{ label: "B設定", curr: bSetC,              prev: bSetP,              suffix: "件" },
+     { label: "B設定率", curr: bSetRateC,        prev: bSetRateP,          suffix: "%" }],
+    [{ label: "B実施", curr: ca?.bExecCount ?? 0, prev: pa?.bExecCount ?? 0, suffix: "件" },
+     { label: "B実施率", curr: bExecRateC,       prev: bExecRateP,          suffix: "%" }],
+    [{ label: "A設定", curr: ca?.aSetCount ?? 0,  prev: pa?.aSetCount ?? 0,  suffix: "件" },
+     { label: "A設定率", curr: aSetRateC,         prev: aSetRateP,           suffix: "%" }],
+    [{ label: "A実施", curr: ca?.aExecCount ?? 0, prev: pa?.aExecCount ?? 0, suffix: "件" },
+     { label: "A実施率", curr: aExecRateC,        prev: aExecRateP,          suffix: "%" }],
+    [{ label: "契約",  curr: ca?.contractCount ?? 0, prev: pa?.contractCount ?? 0, suffix: "件" },
+     { label: "契約率", curr: contractRateC,      prev: contractRateP,       suffix: "%" }],
+  ];
+
+  function Cell({ item }: { item: { label: string; curr: number; prev: number; suffix: string } | null }) {
+    if (!item) return <div />;
+    const noAgg = !ca && item.label !== "DM";
+    return (
+      <div className={`rounded-xl border p-3 space-y-1 ${noAgg ? "opacity-40 bg-gray-50" : "bg-white"}`}>
+        <p className="text-sm font-semibold text-gray-700">{item.label}</p>
+        <p className="text-xl font-bold leading-none">
+          {item.curr.toLocaleString()}
+          <span className="text-xs font-normal text-gray-400 ml-0.5">{item.suffix}</span>
+        </p>
+        <Diff curr={item.curr} prev={item.prev} suffix={item.suffix} />
+      </div>
+    );
+  }
+
+  return (
+    <Card className="border-t-4" style={{ borderTopColor: color }}>
+      <CardHeader className="pb-3">
+        <CardTitle className="text-sm font-bold" style={{ color }}>{team}</CardTitle>
+        <p className="text-xs text-gray-400">アポインター {c.appointerCount}人</p>
+        {!ca && <p className="text-xs text-amber-600 mt-1">※ B実施以降は「チーム別集計を同期」で表示されます</p>}
+      </CardHeader>
+      <CardContent>
+        <div className="space-y-2">
+          {rows.map(([left, right], i) => (
+            <div key={i} className="grid grid-cols-2 gap-2">
+              <Cell item={left} />
+              {right ? <Cell item={right} /> : <div />}
             </div>
           ))}
         </div>
@@ -270,6 +360,8 @@ export default function OverviewPage() {
   const [trend,    setTrend]    = useState<TrendPoint[]>([]);
   const [currAgg,  setCurrAgg]  = useState<Aggregate | null>(null);
   const [prevAgg,  setPrevAgg]  = useState<Aggregate | null>(null);
+  const [currTeamAgg, setCurrTeamAgg] = useState<Record<string, TeamAgg>>({});
+  const [prevTeamAgg, setPrevTeamAgg] = useState<Record<string, TeamAgg>>({});
   const [loading,  setLoading]  = useState(true);
 
   // フィルター
@@ -290,6 +382,8 @@ export default function OverviewPage() {
         setTrend(d.trend ?? []);
         setCurrAgg(d.currentAggregate ?? null);
         setPrevAgg(d.previousAggregate ?? null);
+        setCurrTeamAgg(d.currentTeamAggregates ?? {});
+        setPrevTeamAgg(d.previousTeamAggregates ?? {});
       })
       .finally(() => setLoading(false));
   }, [status]);
@@ -336,9 +430,32 @@ export default function OverviewPage() {
     }
   }
 
+  // Sales ユーザーは自チームのデータを先頭に表示
+  const isSales = role === "Sales";
+  const myTeamAgg     = team ? currTeamAgg[team] ?? null : null;
+  const myTeamPrevAgg = team ? prevTeamAgg[team] ?? null : null;
+  const myTeamStats     = team ? current?.byTeam.find((b) => b.team === team) ?? null : null;
+  const myTeamPrevStats = team ? previous?.byTeam.find((b) => b.team === team) ?? null : null;
+
   return (
     <PageLayout title="全体実績" role={role ?? "Admin"} userName={userName} userImage={image} userTeam={team}>
       <div className="space-y-6">
+
+        {/* Sales: 自チームの実績を先頭に */}
+        {isSales && team && current && (
+          <div>
+            <p className="text-xs text-gray-400 mb-3">
+              {current.year}年{current.month}月 の自チーム実績（{team}）
+            </p>
+            <TeamPipelineCard
+              team={team}
+              curr={myTeamStats}
+              prev={myTeamPrevStats}
+              currAgg={myTeamAgg}
+              prevAgg={myTeamPrevAgg}
+            />
+          </div>
+        )}
 
         {/* ① 今月の全体数字 */}
         {current && (
@@ -350,20 +467,35 @@ export default function OverviewPage() {
           </div>
         )}
 
-        {/* ② チームごとの数字 */}
+        {/* ② チームごとの数字（Admin: フルパイプライン / 他: DM+B設定のみ） */}
         {current && (
           <div>
             <p className="text-xs text-gray-400 mb-3">チーム別（前月比）</p>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-              {TEAMS.map((t) => (
-                <TeamCard
-                  key={t}
-                  team={t}
-                  curr={current.byTeam.find((b) => b.team === t) ?? null}
-                  prev={previous?.byTeam.find((b) => b.team === t) ?? null}
-                />
-              ))}
-            </div>
+            {role === "Admin" ? (
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                {TEAMS.map((t) => (
+                  <TeamPipelineCard
+                    key={t}
+                    team={t}
+                    curr={current.byTeam.find((b) => b.team === t) ?? null}
+                    prev={previous?.byTeam.find((b) => b.team === t) ?? null}
+                    currAgg={currTeamAgg[t] ?? null}
+                    prevAgg={prevTeamAgg[t] ?? null}
+                  />
+                ))}
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                {TEAMS.map((t) => (
+                  <TeamCard
+                    key={t}
+                    team={t}
+                    curr={current.byTeam.find((b) => b.team === t) ?? null}
+                    prev={previous?.byTeam.find((b) => b.team === t) ?? null}
+                  />
+                ))}
+              </div>
+            )}
           </div>
         )}
 

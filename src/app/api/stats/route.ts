@@ -115,7 +115,7 @@ export async function GET(req: NextRequest) {
     trendMonths.push({ year: d.getFullYear(), month: d.getMonth() + 1 });
   }
 
-  const [trendRes, aggregatesRes] = await Promise.all([
+  const [trendRes, aggregatesRes, teamAggCurrRes, teamAggPrevRes] = await Promise.all([
     supabaseAdmin
       .from("performance_records")
       .select("user_id, team, dm_count, appo_count, year, month")
@@ -132,6 +132,16 @@ export async function GET(req: NextRequest) {
           .map((m) => `and(year.eq.${m.year},month.eq.${m.month})`)
           .join(",")
       ),
+    supabaseAdmin
+      .from("team_monthly_aggregates")
+      .select("team, b_set_count, b_exec_count, a_set_count, a_exec_count, contract_count")
+      .eq("year", year)
+      .eq("month", month),
+    supabaseAdmin
+      .from("team_monthly_aggregates")
+      .select("team, b_set_count, b_exec_count, a_set_count, a_exec_count, contract_count")
+      .eq("year", prevYear)
+      .eq("month", prevMonth),
   ]);
 
   const trendRecords = trendRes.data ?? [];
@@ -164,6 +174,26 @@ export async function GET(req: NextRequest) {
     };
   });
 
+  // チーム別集計データをマップ化
+  function toTeamAggMap(rows: typeof teamAggCurrRes.data) {
+    const map = new Map<string, {
+      bSetCount: number; bExecCount: number;
+      aSetCount: number; aExecCount: number; contractCount: number;
+    }>();
+    for (const r of rows ?? []) {
+      map.set(r.team, {
+        bSetCount:    r.b_set_count    ?? 0,
+        bExecCount:   r.b_exec_count   ?? 0,
+        aSetCount:    r.a_set_count    ?? 0,
+        aExecCount:   r.a_exec_count   ?? 0,
+        contractCount: r.contract_count ?? 0,
+      });
+    }
+    return map;
+  }
+  const currTeamAggMap = toTeamAggMap(teamAggCurrRes.data);
+  const prevTeamAggMap = toTeamAggMap(teamAggPrevRes.data);
+
   return NextResponse.json({
     current,
     previous,
@@ -186,5 +216,7 @@ export async function GET(req: NextRequest) {
           revenue:       prevAggregate.revenue ?? 0,
         }
       : null,
+    currentTeamAggregates:  Object.fromEntries(currTeamAggMap),
+    previousTeamAggregates: Object.fromEntries(prevTeamAggMap),
   });
 }

@@ -207,6 +207,8 @@ function AggregateSheetForm() {
   const [syncMonth, setSyncMonth] = useState(String(now.getMonth() + 1));
   const [syncing, setSyncing]     = useState(false);
   const [syncMsg, setSyncMsg]     = useState<{ ok: boolean; msg: string; mock?: boolean } | null>(null);
+  const [syncingTeam, setSyncingTeam] = useState(false);
+  const [syncTeamMsg, setSyncTeamMsg] = useState<{ ok: boolean; msg: string; mock?: boolean } | null>(null);
 
   const load = useCallback(async () => {
     const r = await fetch("/api/aggregate-sheet-config");
@@ -251,6 +253,28 @@ function AggregateSheetForm() {
       setSyncMsg({ ok: false, msg: d.error ?? "同期に失敗しました" });
     }
     setSyncing(false);
+  }
+
+  async function handleSyncTeam() {
+    setSyncingTeam(true); setSyncTeamMsg(null);
+    const r = await fetch("/api/sheets/sync-team-aggregate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ year: parseInt(syncYear), month: parseInt(syncMonth) }),
+    });
+    const d = await r.json();
+    if (r.ok && d.ok) {
+      const teamSummary = Object.entries(d.byTeam as Record<string, { bSetCount: number; bExecCount: number; aSetCount: number; aExecCount: number; contractCount: number }>)
+        .map(([t, v]) => `${t}: B設定${v.bSetCount} B実施${v.bExecCount} A設定${v.aSetCount} 契約${v.contractCount}`)
+        .join(" / ");
+      setSyncTeamMsg({
+        ok: true, mock: d.mockMode,
+        msg: `${syncYear}年${syncMonth}月（${d.rowCount}行）— ${teamSummary || "データなし"}`,
+      });
+    } else {
+      setSyncTeamMsg({ ok: false, msg: d.error ?? "同期に失敗しました" });
+    }
+    setSyncingTeam(false);
   }
 
   return (
@@ -358,6 +382,38 @@ function AggregateSheetForm() {
             </div>
           )}
         </div>
+
+        {/* チーム別同期 */}
+        <div className="border-t pt-3 space-y-2">
+          <p className="text-xs font-medium text-gray-600">チーム別データを同期（全体シートから集計）</p>
+          <p className="text-xs text-gray-400">全体シートのA列（チーム名）でグループ化し、B設定〜契約をチーム別に集計します。年月は上の選択を共有します。</p>
+          <div className="flex flex-wrap gap-2 items-center">
+            <Button
+              onClick={handleSyncTeam}
+              disabled={syncingTeam || configs.length === 0}
+              variant="outline"
+              size="sm"
+              className="gap-1.5"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${syncingTeam ? "animate-spin" : ""}`} />
+              {syncingTeam ? "集計中..." : "チーム別集計を同期"}
+            </Button>
+            {configs.length === 0 && (
+              <span className="text-xs text-gray-400">先にシートを登録してください</span>
+            )}
+          </div>
+          {syncTeamMsg && (
+            <div className={`rounded-lg px-3 py-2 text-xs space-y-0.5 ${syncTeamMsg.ok ? "bg-green-50 text-green-800" : "bg-red-50 text-red-800"}`}>
+              <div className="flex items-center gap-1.5 font-semibold">
+                {syncTeamMsg.ok ? <CheckCircle2 className="w-3.5 h-3.5" /> : <AlertCircle className="w-3.5 h-3.5" />}
+                {syncTeamMsg.ok ? "集計完了" : "集計エラー"}
+                {syncTeamMsg.mock && <span className="ml-1 bg-amber-100 text-amber-700 rounded px-1.5 py-0.5 flex items-center gap-1"><FlaskConical className="w-3 h-3" />モック</span>}
+              </div>
+              <p>{syncTeamMsg.msg}</p>
+            </div>
+          )}
+        </div>
+
       </CardContent>
     </Card>
   );
