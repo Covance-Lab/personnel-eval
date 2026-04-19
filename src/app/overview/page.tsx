@@ -87,20 +87,55 @@ function OverallCard({
   const prevAExecRate    = pct(prevAgg?.aExecCount ?? 0, prevAgg?.aSetCount  ?? 0);
   const prevContractRate = pct(prevAgg?.contractCount ?? 0, prevAgg?.aExecCount ?? 0);
 
-  const rows = [
-    { label: "DM数",    curr: curr.dmCount,               prev: prev.dmCount,               suffix: "件" },
-    { label: "B設定数", curr: curr.bSetCount,             prev: prev.bSetCount,             suffix: "件" },
-    { label: "B設定率", curr: curr.bSetRate,              prev: prev.bSetRate,              suffix: "%" },
-    { label: "B実施数", curr: currAgg?.bExecCount ?? 0,  prev: prevAgg?.bExecCount ?? 0,  suffix: "件", noAgg: !currAgg },
-    { label: "B実施率", curr: bExecRate,                  prev: prevBExecRate,              suffix: "%",  noAgg: !currAgg },
-    { label: "A設定数", curr: currAgg?.aSetCount  ?? 0,  prev: prevAgg?.aSetCount  ?? 0,  suffix: "件", noAgg: !currAgg },
-    { label: "A設定率", curr: aSetRate,                   prev: prevASetRate,               suffix: "%",  noAgg: !currAgg },
-    { label: "A実施数", curr: currAgg?.aExecCount ?? 0,  prev: prevAgg?.aExecCount ?? 0,  suffix: "件", noAgg: !currAgg },
-    { label: "A実施率", curr: aExecRate,                  prev: prevAExecRate,              suffix: "%",  noAgg: !currAgg },
-    { label: "契約数",  curr: currAgg?.contractCount ?? 0, prev: prevAgg?.contractCount ?? 0, suffix: "件", noAgg: !currAgg },
-    { label: "契約率",  curr: contractRate,               prev: prevContractRate,           suffix: "%",  noAgg: !currAgg },
-    { label: "売上",    curr: currAgg?.revenue ?? 0,      prev: prevAgg?.revenue ?? 0,      suffix: "円", noAgg: !currAgg, money: true },
+  // 2列表示用ペア: [左カラム, 右カラム | null]
+  const pairs: Array<[
+    { label: string; curr: number; prev: number; suffix: string; noAgg?: boolean; money?: boolean } | null,
+    { label: string; curr: number; prev: number; suffix: string; noAgg?: boolean; money?: boolean } | null,
+  ]> = [
+    [
+      { label: "DM",    curr: curr.dmCount,   prev: prev.dmCount,   suffix: "件" },
+      null,
+    ],
+    [
+      { label: "B設定", curr: curr.bSetCount, prev: prev.bSetCount, suffix: "件" },
+      { label: "B設定率", curr: curr.bSetRate, prev: prev.bSetRate, suffix: "%" },
+    ],
+    [
+      { label: "B実施", curr: currAgg?.bExecCount ?? 0, prev: prevAgg?.bExecCount ?? 0, suffix: "件", noAgg: !currAgg },
+      { label: "B実施率", curr: bExecRate, prev: prevBExecRate, suffix: "%", noAgg: !currAgg },
+    ],
+    [
+      { label: "A設定", curr: currAgg?.aSetCount ?? 0, prev: prevAgg?.aSetCount ?? 0, suffix: "件", noAgg: !currAgg },
+      { label: "A設定率", curr: aSetRate, prev: prevASetRate, suffix: "%", noAgg: !currAgg },
+    ],
+    [
+      { label: "A実施", curr: currAgg?.aExecCount ?? 0, prev: prevAgg?.aExecCount ?? 0, suffix: "件", noAgg: !currAgg },
+      { label: "A実施率", curr: aExecRate, prev: prevAExecRate, suffix: "%", noAgg: !currAgg },
+    ],
+    [
+      { label: "契約", curr: currAgg?.contractCount ?? 0, prev: prevAgg?.contractCount ?? 0, suffix: "件", noAgg: !currAgg },
+      { label: "契約率", curr: contractRate, prev: prevContractRate, suffix: "%", noAgg: !currAgg },
+    ],
+    [
+      { label: "売上", curr: currAgg?.revenue ?? 0, prev: prevAgg?.revenue ?? 0, suffix: "円", noAgg: !currAgg, money: true },
+      null,
+    ],
   ];
+
+  function StatCell({ item }: { item: { label: string; curr: number; prev: number; suffix: string; noAgg?: boolean; money?: boolean } | null }) {
+    if (!item) return <div />;
+    const { label, curr: c, prev: p, suffix, noAgg, money } = item;
+    return (
+      <div className={`rounded-xl border p-3 space-y-1 ${noAgg ? "opacity-40 bg-gray-50" : "bg-white"}`}>
+        <p className="text-xs text-gray-500">{label}</p>
+        <p className="text-xl font-bold leading-none">
+          {money ? `¥${c.toLocaleString()}` : c.toLocaleString()}
+          {!money && <span className="text-xs font-normal text-gray-400 ml-0.5">{suffix}</span>}
+        </p>
+        <Diff curr={c} prev={p} suffix={money ? "" : suffix} />
+      </div>
+    );
+  }
 
   return (
     <Card>
@@ -108,20 +143,16 @@ function OverallCard({
         <CardTitle className="text-sm font-semibold text-gray-700">全体</CardTitle>
         {!currAgg && (
           <p className="text-xs text-amber-600 mt-1">
-            ※ B実施数以降は集計シートを同期すると表示されます（Admin設定 → 集計シート設定）
+            ※ B実施以降は集計シートを同期すると表示されます（Admin設定 → 集計シート設定）
           </p>
         )}
       </CardHeader>
       <CardContent>
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
-          {rows.map(({ label, curr: c, prev: p, suffix, noAgg, money }) => (
-            <div key={label} className={`rounded-xl border p-3 space-y-1 ${noAgg ? "opacity-40" : "bg-white"}`}>
-              <p className="text-xs text-gray-500">{label}</p>
-              <p className="text-xl font-bold leading-none">
-                {money ? `¥${c.toLocaleString()}` : `${c.toLocaleString()}`}
-                {!money && <span className="text-xs font-normal text-gray-400 ml-0.5">{suffix}</span>}
-              </p>
-              <Diff curr={c} prev={p} suffix={money ? "" : suffix} />
+        <div className="space-y-2">
+          {pairs.map(([left, right], i) => (
+            <div key={i} className="grid grid-cols-2 gap-2">
+              <StatCell item={left} />
+              {right ? <StatCell item={right} /> : <div />}
             </div>
           ))}
         </div>

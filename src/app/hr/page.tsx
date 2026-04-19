@@ -714,66 +714,37 @@ export default function HRPage() {
     <PageLayout title="人事評価" role={role ?? "Admin"} userName={userName} userImage={image} userTeam={team}>
       <div className="space-y-6">
 
-        {/* サマリーカード */}
-        {summary && (
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <Card>
-              <CardContent className="pt-4 pb-4">
-                <div className="flex items-center gap-2 mb-1">
-                  <Users className="w-4 h-4 text-gray-400" />
-                  <p className="text-xs text-gray-500">アポインター総数</p>
-                </div>
-                <p className="text-3xl font-bold">{summary.total}<span className="text-base font-normal text-gray-500 ml-1">人</span></p>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardContent className="pt-4 pb-4">
-                <div className="flex items-center gap-2 mb-1">
-                  <UserCheck className="w-4 h-4 text-green-500" />
-                  <p className="text-xs text-gray-500">デビュー済み</p>
-                </div>
-                <p className="text-3xl font-bold text-green-600">{summary.debuted}<span className="text-base font-normal text-gray-500 ml-1">人</span></p>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardContent className="pt-4 pb-4">
-                <div className="flex items-center gap-2 mb-1">
-                  <TrendingUp className="w-4 h-4 text-indigo-500" />
-                  <p className="text-xs text-gray-500">デビュー前</p>
-                </div>
-                <p className="text-3xl font-bold text-indigo-600">
-                  {summary.preDebut.reduce((s, p) => s + p.count, 0)}
-                  <span className="text-base font-normal text-gray-500 ml-1">人</span>
-                </p>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardContent className="pt-4 pb-4">
-                <div className="flex items-center gap-2 mb-1">
-                  <UserX className="w-4 h-4 text-red-400" />
-                  <p className="text-xs text-gray-500">当月離脱</p>
-                </div>
-                <p className="text-3xl font-bold text-red-500">{summary.churned}<span className="text-base font-normal text-gray-500 ml-1">人</span></p>
-              </CardContent>
-            </Card>
-          </div>
-        )}
-
-        {/* デビュー前ステップ内訳 */}
+        {/* サマリー：2列レイアウト */}
         {summary && (
           <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-sm font-semibold text-gray-700">デビュー前 — ステップ別人数</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="flex flex-wrap gap-3">
-                {summary.preDebut.map(({ step, count }) => (
-                  <div key={step} className="flex items-center gap-2 bg-gray-50 rounded-lg px-3 py-2 border">
-                    <span className="text-xs font-medium text-gray-500">{STEP_LABELS[step] ?? `STEP ${step}`}</span>
-                    <span className="text-lg font-bold text-indigo-600">{count}</span>
-                    <span className="text-xs text-gray-400">人</span>
-                  </div>
-                ))}
+            <CardContent className="pt-4 pb-4">
+              <div className="grid grid-cols-2 gap-4">
+                {/* 左列：ステータス別 */}
+                <div className="space-y-2">
+                  {[
+                    { icon: <Users className="w-3.5 h-3.5 text-gray-400" />, label: "アポインター総数", value: summary.total, color: "text-gray-800" },
+                    { icon: <UserCheck className="w-3.5 h-3.5 text-green-500" />, label: "デビュー済み", value: summary.debuted, color: "text-green-600" },
+                    { icon: <TrendingUp className="w-3.5 h-3.5 text-indigo-500" />, label: "デビュー前", value: summary.preDebut.reduce((s, p) => s + p.count, 0), color: "text-indigo-600" },
+                    { icon: <UserX className="w-3.5 h-3.5 text-red-400" />, label: "当月離脱", value: summary.churned, color: "text-red-500" },
+                  ].map(({ icon, label, value, color }) => (
+                    <div key={label} className="flex items-center justify-between bg-gray-50 rounded-lg px-3 py-2 border">
+                      <div className="flex items-center gap-1.5">
+                        {icon}
+                        <span className="text-xs text-gray-500">{label}</span>
+                      </div>
+                      <span className={`text-lg font-bold ${color}`}>{value}<span className="text-xs font-normal text-gray-400 ml-0.5">人</span></span>
+                    </div>
+                  ))}
+                </div>
+                {/* 右列：STEP別 */}
+                <div className="space-y-2">
+                  {summary.preDebut.map(({ step, count }) => (
+                    <div key={step} className="flex items-center justify-between bg-gray-50 rounded-lg px-3 py-2 border">
+                      <span className="text-xs text-gray-500">{step === 0 ? "未着手" : `STEP ${step}`}</span>
+                      <span className="text-lg font-bold text-indigo-600">{count}<span className="text-xs font-normal text-gray-400 ml-0.5">人</span></span>
+                    </div>
+                  ))}
+                </div>
               </div>
             </CardContent>
           </Card>
@@ -811,14 +782,19 @@ export default function HRPage() {
             <CardTitle className="text-sm font-semibold text-gray-700">
               アポインター一覧 <span className="font-normal text-gray-400 ml-1">({appointers.length}人)</span>
             </CardTitle>
+            <p className="text-xs text-gray-400">名前をタップすると詳細が展開されます</p>
           </CardHeader>
           <CardContent className="p-0">
             {appointers.length === 0 ? (
               <p className="text-sm text-gray-400 text-center py-8">該当するアポインターがいません</p>
             ) : (
-              <div className="divide-y">
+              <div>
                 {appointers.map((u) => (
-                  <UserRow key={u.id} user={u} />
+                  <AppointerExpandRow
+                    key={u.id}
+                    user={u}
+                    onMemoSaved={(id, memo) => setUsers((prev) => prev.map((p) => p.id === id ? { ...p, salesMemo: memo } : p))}
+                  />
                 ))}
               </div>
             )}
@@ -832,11 +808,16 @@ export default function HRPage() {
               <CardTitle className="text-sm font-semibold text-gray-700">
                 アポインターマネージャー <span className="font-normal text-gray-400 ml-1">({ams.length}人)</span>
               </CardTitle>
+              <p className="text-xs text-gray-400">名前をタップすると詳細が展開されます</p>
             </CardHeader>
             <CardContent className="p-0">
-              <div className="divide-y">
+              <div>
                 {ams.map((u) => (
-                  <UserRow key={u.id} user={u} />
+                  <AMExpandRow
+                    key={u.id}
+                    user={u}
+                    onMemoSaved={(id, memo) => setUsers((prev) => prev.map((p) => p.id === id ? { ...p, salesMemo: memo } : p))}
+                  />
                 ))}
               </div>
             </CardContent>
