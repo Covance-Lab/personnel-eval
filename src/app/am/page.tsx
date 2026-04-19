@@ -109,6 +109,96 @@ function DonutChart({ label, value, goal, suffix, decimals = 0 }: DonutProps) {
   );
 }
 
+// ─── 月次推移グラフ（フィルター付き） ─────────────────────────────────
+type AMMetric = "DM数" | "B設定数" | "B設定率";
+const AM_COUNT_METRICS: AMMetric[] = ["DM数", "B設定数"];
+const AM_RATE_METRICS:  AMMetric[] = ["B設定率"];
+const AM_METRIC_COLOR: Record<AMMetric, string> = {
+  "DM数":   "#6366f1",
+  "B設定数": "#ec4899",
+  "B設定率": "#22c55e",
+};
+
+function AMTrendChart({ data }: { data: Record<string, number | string>[] }) {
+  const [active, setActive] = useState<Set<AMMetric>>(new Set(["DM数", "B設定数"]));
+
+  function toggle(m: AMMetric) {
+    const mIsRate = AM_RATE_METRICS.includes(m);
+    setActive((prev) => {
+      const next = new Set(prev);
+      const prevHasRate = [...prev].some((k) => AM_RATE_METRICS.includes(k));
+      // 単位グループが切り替わる場合はリセット
+      if (mIsRate && !prevHasRate) return new Set([m]);
+      if (!mIsRate && prevHasRate)  return new Set([m]);
+      if (next.has(m)) { next.delete(m); if (next.size === 0) next.add(m); }
+      else { next.add(m); }
+      return next;
+    });
+  }
+
+  const isRateMode = [...active].some((k) => AM_RATE_METRICS.includes(k));
+
+  return (
+    <div className="bg-white rounded-2xl border p-4 space-y-3">
+      <p className="text-xs font-semibold text-gray-600">月次推移 — アポインターチーム合計</p>
+      <p className="text-xs text-gray-400">※ 過去月は各アポインターのシートを同期すると表示されます</p>
+
+      {/* フィルターボタン */}
+      <div className="space-y-1.5">
+        <div>
+          <p className="text-xs text-gray-400 mb-1">件数（同時選択可）</p>
+          <div className="flex gap-1.5 flex-wrap">
+            {AM_COUNT_METRICS.map((m) => {
+              const on = active.has(m);
+              return (
+                <button key={m} onClick={() => toggle(m)}
+                  className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors ${
+                    on ? "text-white border-transparent" : "bg-white text-gray-500 border-gray-200"
+                  }`}
+                  style={on ? { backgroundColor: AM_METRIC_COLOR[m] } : {}}
+                >{m}</button>
+              );
+            })}
+          </div>
+        </div>
+        <div>
+          <p className="text-xs text-gray-400 mb-1">率（件数と同時表示不可）</p>
+          <div className="flex gap-1.5 flex-wrap">
+            {AM_RATE_METRICS.map((m) => {
+              const on = active.has(m);
+              return (
+                <button key={m} onClick={() => toggle(m)}
+                  className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors ${
+                    on ? "text-white border-transparent" : "bg-white text-gray-500 border-gray-200"
+                  }`}
+                  style={on ? { backgroundColor: AM_METRIC_COLOR[m] } : {}}
+                >{m}</button>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+
+      {/* グラフ */}
+      <ResponsiveContainer width="100%" height={220}>
+        <LineChart data={data} margin={{ top: 5, right: 10, bottom: 5, left: 0 }}>
+          <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+          <XAxis dataKey="label" tick={{ fontSize: 10 }} />
+          <YAxis tick={{ fontSize: 10 }} width={40} unit={isRateMode ? "%" : ""} />
+          <Tooltip formatter={(v: unknown) =>
+            isRateMode ? `${v}%` : `${Number(v).toLocaleString()}件`
+          } />
+          <Legend wrapperStyle={{ fontSize: 11 }} />
+          {([...active] as AMMetric[]).map((m) => (
+            <Line key={m} type="monotone" dataKey={m}
+              stroke={AM_METRIC_COLOR[m]} strokeWidth={2} dot={{ r: 3 }} connectNulls />
+          ))}
+        </LineChart>
+      </ResponsiveContainer>
+    </div>
+  );
+}
+
 // ─── メインページ ──────────────────────────────────────────────────
 export default function AMPage() {
   const router = useRouter();
@@ -239,63 +329,9 @@ export default function AMPage() {
           <p>DM数: {GOALS.dmCount.toLocaleString()}通　B設定数: {GOALS.bSetCount}件　B設定率: {GOALS.bSetRate}%</p>
         </div>
 
-        {/* 月次推移グラフ① — アポインターチーム実績 */}
+        {/* 月次推移グラフ — アポインターチーム */}
         {trendData.length > 0 && (
-          <div className="bg-white rounded-2xl border p-4 space-y-3">
-            <p className="text-xs font-semibold text-gray-600">月次推移 — アポインターチーム</p>
-
-            {/* DM数・B設定数 */}
-            <div>
-              <p className="text-xs text-gray-400 mb-1">DM数 / B設定数</p>
-              <ResponsiveContainer width="100%" height={180}>
-                <LineChart data={trendData} margin={{ top: 5, right: 10, bottom: 5, left: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                  <XAxis dataKey="label" tick={{ fontSize: 10 }} />
-                  <YAxis tick={{ fontSize: 10 }} width={40} />
-                  <Tooltip />
-                  <Legend wrapperStyle={{ fontSize: 11 }} />
-                  <Line type="monotone" dataKey="DM数" stroke="#6366f1" strokeWidth={2} dot={{ r: 3 }} />
-                  <Line type="monotone" dataKey="B設定数" stroke="#ec4899" strokeWidth={2} dot={{ r: 3 }} />
-                </LineChart>
-              </ResponsiveContainer>
-            </div>
-
-            {/* B設定率 */}
-            <div>
-              <p className="text-xs text-gray-400 mb-1">B設定率（%）</p>
-              <ResponsiveContainer width="100%" height={140}>
-                <LineChart data={trendData} margin={{ top: 5, right: 10, bottom: 5, left: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                  <XAxis dataKey="label" tick={{ fontSize: 10 }} />
-                  <YAxis tick={{ fontSize: 10 }} width={40} unit="%" />
-                  <Tooltip formatter={(v: unknown) => [`${v}%`, "B設定率"]} />
-                  <Line type="monotone" dataKey="B設定率" stroke="#22c55e" strokeWidth={2} dot={{ r: 3 }} />
-                </LineChart>
-              </ResponsiveContainer>
-            </div>
-          </div>
-        )}
-
-        {/* 月次推移グラフ② — セールスファネル */}
-        {hasFunnelData && (
-          <div className="bg-white rounded-2xl border p-4 space-y-3">
-            <p className="text-xs font-semibold text-gray-600">月次推移 — セールスファネル</p>
-            <p className="text-xs text-gray-400">B設定 → B実施 → A設定 → A実施 → 契約</p>
-            <ResponsiveContainer width="100%" height={200}>
-              <LineChart data={trendData} margin={{ top: 5, right: 10, bottom: 5, left: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                <XAxis dataKey="label" tick={{ fontSize: 10 }} />
-                <YAxis tick={{ fontSize: 10 }} width={30} />
-                <Tooltip />
-                <Legend wrapperStyle={{ fontSize: 11 }} />
-                <Line type="monotone" dataKey="B設定数" stroke="#ec4899" strokeWidth={2} dot={{ r: 3 }} />
-                <Line type="monotone" dataKey="B実施"   stroke="#f97316" strokeWidth={2} dot={{ r: 3 }} />
-                <Line type="monotone" dataKey="A設定"   stroke="#eab308" strokeWidth={2} dot={{ r: 3 }} />
-                <Line type="monotone" dataKey="A実施"   stroke="#3b82f6" strokeWidth={2} dot={{ r: 3 }} />
-                <Line type="monotone" dataKey="契約"    stroke="#22c55e" strokeWidth={2} dot={{ r: 3 }} />
-              </LineChart>
-            </ResponsiveContainer>
-          </div>
+          <AMTrendChart data={trendData} />
         )}
 
       </div>

@@ -115,23 +115,17 @@ export async function GET(req: NextRequest) {
     trendMonths.push({ year: d.getFullYear(), month: d.getMonth() + 1 });
   }
 
-  const [trendRes, aggregatesRes, teamAggCurrRes, teamAggPrevRes] = await Promise.all([
+  const trendOr = trendMonths.map((m) => `and(year.eq.${m.year},month.eq.${m.month})`).join(",");
+
+  const [trendRes, aggregatesRes, teamAggCurrRes, teamAggPrevRes, teamAggTrendRes] = await Promise.all([
     supabaseAdmin
       .from("performance_records")
       .select("user_id, team, dm_count, appo_count, year, month")
-      .or(
-        trendMonths
-          .map((m) => `and(year.eq.${m.year},month.eq.${m.month})`)
-          .join(",")
-      ),
+      .or(trendOr),
     supabaseAdmin
       .from("monthly_aggregates")
       .select("year, month, b_exec_count, a_set_count, a_exec_count, contract_count, revenue")
-      .or(
-        trendMonths
-          .map((m) => `and(year.eq.${m.year},month.eq.${m.month})`)
-          .join(",")
-      ),
+      .or(trendOr),
     supabaseAdmin
       .from("team_monthly_aggregates")
       .select("team, b_set_count, b_exec_count, a_set_count, a_exec_count, contract_count")
@@ -142,6 +136,10 @@ export async function GET(req: NextRequest) {
       .select("team, b_set_count, b_exec_count, a_set_count, a_exec_count, contract_count")
       .eq("year", prevYear)
       .eq("month", prevMonth),
+    supabaseAdmin
+      .from("team_monthly_aggregates")
+      .select("year, month, team, b_set_count, b_exec_count, a_set_count, a_exec_count, contract_count")
+      .or(trendOr),
   ]);
 
   const trendRecords = trendRes.data ?? [];
@@ -152,6 +150,23 @@ export async function GET(req: NextRequest) {
   // 今月・前月の集計データ
   const currAggregate = aggregateMap.get(`${year}-${month}`) ?? null;
   const prevAggregate = aggregateMap.get(`${prevYear}-${prevMonth}`) ?? null;
+
+  // チーム別集計トレンドマップ: "year-month" → team → counts
+  const teamAggTrendRows = teamAggTrendRes.data ?? [];
+  const teamAggByMonth = new Map<string, Record<string, {
+    bSetCount: number; bExecCount: number; aSetCount: number; aExecCount: number; contractCount: number;
+  }>>();
+  for (const r of teamAggTrendRows) {
+    const key = `${r.year}-${r.month}`;
+    if (!teamAggByMonth.has(key)) teamAggByMonth.set(key, {});
+    teamAggByMonth.get(key)![r.team] = {
+      bSetCount:    r.b_set_count    ?? 0,
+      bExecCount:   r.b_exec_count   ?? 0,
+      aSetCount:    r.a_set_count    ?? 0,
+      aExecCount:   r.a_exec_count   ?? 0,
+      contractCount: r.contract_count ?? 0,
+    };
+  }
 
   const trend = trendMonths.map(({ year: y, month: m }) => {
     const recs = trendRecords.filter((r) => r.year === y && r.month === m);
@@ -171,6 +186,7 @@ export async function GET(req: NextRequest) {
             revenue:       agg.revenue ?? 0,
           }
         : null,
+      teamAggregates: teamAggByMonth.get(`${y}-${m}`) ?? {},
     };
   });
 

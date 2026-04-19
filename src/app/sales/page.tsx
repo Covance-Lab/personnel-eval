@@ -9,52 +9,237 @@ import PageLayout from "@/components/layout/PageLayout";
 import SurveyNotice from "@/components/survey/SurveyNotice";
 import { useViewAs } from "@/contexts/ViewAsContext";
 import {
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
-  Legend, ResponsiveContainer, LineChart, Line,
+  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip,
+  Legend, ResponsiveContainer,
 } from "recharts";
 
-interface MonthRecord {
-  year: number;
-  month: number;
-  dmCount: number;
-  appoCount: number;
+// ─── 型 ────────────────────────────────────────────────────────────
+interface TeamStats { team: string; dmCount: number; bSetCount: number; bSetRate: number; appointerCount: number; }
+interface TeamAgg   { bSetCount: number; bExecCount: number; aSetCount: number; aExecCount: number; contractCount: number; }
+interface TrendPoint {
+  year: number; month: number; label: string;
+  byTeam: TeamStats[];
+  teamAggregates: Record<string, TeamAgg>;
+}
+interface StatsResponse {
+  current:  { byTeam: TeamStats[] };
+  previous: { byTeam: TeamStats[] };
+  trend: TrendPoint[];
+  currentTeamAggregates:  Record<string, TeamAgg>;
+  previousTeamAggregates: Record<string, TeamAgg>;
 }
 
-interface AggregateRecord {
-  year: number;
-  month: number;
-  bExecCount: number;
-  aSetCount: number;
-  aExecCount: number;
-  contractCount: number;
-  revenue: number;
-}
+// ─── ユーティリティ ─────────────────────────────────────────────────
+function round1(n: number) { return Math.round(n * 10) / 10; }
+function pct(num: number, den: number) { return den > 0 ? round1(num / den * 100) : 0; }
 
 function Diff({ curr, prev, suffix = "" }: { curr: number; prev: number; suffix?: string }) {
   const diff = curr - prev;
   if (diff === 0) return <span className="text-xs text-gray-400 flex items-center gap-0.5"><Minus className="w-3 h-3" />前月同</span>;
-  if (diff > 0) return <span className="text-xs text-green-600 flex items-center gap-0.5"><TrendingUp className="w-3 h-3" />+{diff.toLocaleString()}{suffix}</span>;
-  return <span className="text-xs text-red-500 flex items-center gap-0.5"><TrendingDown className="w-3 h-3" />{diff.toLocaleString()}{suffix}</span>;
+  if (diff > 0)  return <span className="text-xs text-green-600 flex items-center gap-0.5"><TrendingUp className="w-3 h-3" />+{Math.abs(diff).toLocaleString()}{suffix}</span>;
+  return <span className="text-xs text-red-500 flex items-center gap-0.5"><TrendingDown className="w-3 h-3" />−{Math.abs(diff).toLocaleString()}{suffix}</span>;
 }
 
-function StatBox({ label, curr, prev, suffix = "" }: { label: string; curr: number; prev: number; suffix?: string }) {
+// ─── 2列ペア形式の実績カード ─────────────────────────────────────────
+function StatsPairCard({
+  curr, prev, currAgg, prevAgg,
+}: {
+  curr: TeamStats | null; prev: TeamStats | null;
+  currAgg: TeamAgg | null; prevAgg: TeamAgg | null;
+}) {
+  const c  = curr  ?? { dmCount: 0, bSetCount: 0, bSetRate: 0, appointerCount: 0, team: "" };
+  const p  = prev  ?? { dmCount: 0, bSetCount: 0, bSetRate: 0, appointerCount: 0, team: "" };
+  const ca = currAgg  ?? null;
+  const pa = prevAgg  ?? null;
+
+  const bSetC = ca?.bSetCount ?? c.bSetCount;
+  const bSetP = pa?.bSetCount ?? p.bSetCount;
+
+  const bSetRateC  = pct(bSetC, c.dmCount);
+  const bSetRateP  = pct(bSetP, p.dmCount);
+  const bExecRateC = pct(ca?.bExecCount ?? 0, bSetC);
+  const bExecRateP = pct(pa?.bExecCount ?? 0, bSetP);
+  const aSetRateC  = pct(ca?.aSetCount ?? 0, ca?.bExecCount ?? 0);
+  const aSetRateP  = pct(pa?.aSetCount ?? 0, pa?.bExecCount ?? 0);
+  const aExecRateC = pct(ca?.aExecCount ?? 0, ca?.aSetCount ?? 0);
+  const aExecRateP = pct(pa?.aExecCount ?? 0, pa?.aSetCount ?? 0);
+  const contractRateC = pct(ca?.contractCount ?? 0, ca?.aExecCount ?? 0);
+  const contractRateP = pct(pa?.contractCount ?? 0, pa?.aExecCount ?? 0);
+
+  type Cell = { label: string; curr: number; prev: number; suffix: string; noAgg?: boolean } | null;
+  const pairs: [Cell, Cell][] = [
+    [{ label: "DM", curr: c.dmCount, prev: p.dmCount, suffix: "件" }, null],
+    [
+      { label: "B設定", curr: bSetC,              prev: bSetP,              suffix: "件" },
+      { label: "B設定率", curr: bSetRateC,        prev: bSetRateP,          suffix: "%" },
+    ],
+    [
+      { label: "B実施", curr: ca?.bExecCount ?? 0, prev: pa?.bExecCount ?? 0, suffix: "件", noAgg: !ca },
+      { label: "B実施率", curr: bExecRateC,        prev: bExecRateP,          suffix: "%", noAgg: !ca },
+    ],
+    [
+      { label: "A設定", curr: ca?.aSetCount ?? 0,  prev: pa?.aSetCount ?? 0,  suffix: "件", noAgg: !ca },
+      { label: "A設定率", curr: aSetRateC,          prev: aSetRateP,           suffix: "%", noAgg: !ca },
+    ],
+    [
+      { label: "A実施", curr: ca?.aExecCount ?? 0, prev: pa?.aExecCount ?? 0, suffix: "件", noAgg: !ca },
+      { label: "A実施率", curr: aExecRateC,         prev: aExecRateP,          suffix: "%", noAgg: !ca },
+    ],
+    [
+      { label: "契約",  curr: ca?.contractCount ?? 0, prev: pa?.contractCount ?? 0, suffix: "件", noAgg: !ca },
+      { label: "契約率", curr: contractRateC,         prev: contractRateP,           suffix: "%", noAgg: !ca },
+    ],
+  ];
+
+  function StatCell({ item }: { item: Cell }) {
+    if (!item) return <div />;
+    return (
+      <div className={`rounded-xl border p-3 space-y-1 ${item.noAgg ? "opacity-40 bg-gray-50" : "bg-white"}`}>
+        <p className="text-sm font-semibold text-gray-700">{item.label}</p>
+        <p className="text-xl font-bold leading-none">
+          {item.curr.toLocaleString()}
+          <span className="text-xs font-normal text-gray-400 ml-0.5">{item.suffix}</span>
+        </p>
+        <Diff curr={item.curr} prev={item.prev} suffix={item.suffix} />
+      </div>
+    );
+  }
+
   return (
-    <div className="bg-white rounded-xl border p-4 space-y-1">
-      <p className="text-xs text-gray-500">{label}</p>
-      <p className="text-2xl font-bold">{curr.toLocaleString()}<span className="text-base font-normal text-gray-400 ml-0.5">{suffix}</span></p>
-      <Diff curr={curr} prev={prev} suffix={suffix} />
-    </div>
+    <Card>
+      <CardContent className="pt-4">
+        {!ca && (
+          <p className="text-xs text-amber-600 mb-3">※ B実施以降は「チーム別集計を同期」後に表示されます</p>
+        )}
+        <div className="space-y-2">
+          {pairs.map(([left, right], i) => (
+            <div key={i} className="grid grid-cols-2 gap-2">
+              <StatCell item={left} />
+              {right ? <StatCell item={right} /> : <div />}
+            </div>
+          ))}
+        </div>
+      </CardContent>
+    </Card>
   );
 }
 
+// ─── 商談・成約推移グラフ ──────────────────────────────────────────
+type MetricKey = "DM数" | "B設定" | "B実施" | "A設定" | "A実施" | "契約"
+               | "B設定率" | "B実施率" | "A設定率" | "A実施率" | "契約率";
+
+const COUNT_METRICS: MetricKey[] = ["DM数", "B設定", "B実施", "A設定", "A実施", "契約"];
+const RATE_METRICS:  MetricKey[] = ["B設定率", "B実施率", "A設定率", "A実施率", "契約率"];
+
+const METRIC_COLOR: Record<MetricKey, string> = {
+  "DM数":   "#6366f1", "B設定":  "#ec4899", "B実施":  "#22c55e",
+  "A設定":  "#f97316", "A実施":  "#0ea5e9", "契約":   "#a16207",
+  "B設定率": "#f59e0b", "B実施率": "#14b8a6", "A設定率": "#8b5cf6",
+  "A実施率": "#e11d48", "契約率":  "#b91c1c",
+};
+
+function PipelineChart({ data }: { data: Record<string, number | string>[] }) {
+  const [active, setActive] = useState<Set<MetricKey>>(new Set(["DM数", "B設定"]));
+  const isRate = (m: MetricKey) => RATE_METRICS.includes(m);
+
+  function toggle(m: MetricKey) {
+    setActive((prev) => {
+      const next = new Set(prev);
+      const mIsRate = isRate(m);
+      // 単位グループが違う場合はリセット
+      if (mIsRate && [...prev].some((k) => !isRate(k))) {
+        return new Set([m]);
+      }
+      if (!mIsRate && [...prev].some((k) => isRate(k))) {
+        return new Set([m]);
+      }
+      if (next.has(m)) { next.delete(m); if (next.size === 0) next.add(m); }
+      else { next.add(m); }
+      return next;
+    });
+  }
+
+  const currentIsRate = [...active].some((k) => isRate(k));
+  const unit = currentIsRate ? "%" : "件";
+
+  return (
+    <Card>
+      <CardHeader className="pb-3">
+        <CardTitle className="text-sm font-semibold text-gray-700">商談・成約推移</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {/* フィルター */}
+        <div className="space-y-2">
+          <div>
+            <p className="text-xs text-gray-500 mb-1.5">件数</p>
+            <div className="flex flex-wrap gap-1.5">
+              {COUNT_METRICS.map((m) => {
+                const on = active.has(m);
+                return (
+                  <button key={m} onClick={() => toggle(m)}
+                    className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors ${
+                      on ? "text-white border-transparent" : "bg-white text-gray-500 border-gray-200 hover:bg-gray-50"
+                    }`}
+                    style={on ? { backgroundColor: METRIC_COLOR[m] } : {}}
+                  >{m}</button>
+                );
+              })}
+            </div>
+          </div>
+          <div>
+            <p className="text-xs text-gray-500 mb-1.5">率（件数と同時表示不可）</p>
+            <div className="flex flex-wrap gap-1.5">
+              {RATE_METRICS.map((m) => {
+                const on = active.has(m);
+                return (
+                  <button key={m} onClick={() => toggle(m)}
+                    className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors ${
+                      on ? "text-white border-transparent" : "bg-white text-gray-500 border-gray-200 hover:bg-gray-50"
+                    }`}
+                    style={on ? { backgroundColor: METRIC_COLOR[m] } : {}}
+                  >{m}</button>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+
+        {/* グラフ */}
+        <ResponsiveContainer width="100%" height={280}>
+          <LineChart data={data} margin={{ top: 5, right: 16, bottom: 5, left: 0 }}>
+            <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+            <XAxis dataKey="label" tick={{ fontSize: 10 }} />
+            <YAxis
+              tick={{ fontSize: 10 }}
+              unit={currentIsRate ? "%" : ""}
+              tickFormatter={(v) => {
+                if (!currentIsRate && v >= 1000) return `${(v / 1000).toFixed(0)}K`;
+                return String(v);
+              }}
+            />
+            <Tooltip
+              formatter={(value, name) => [`${Number(value).toLocaleString()}${unit}`, name]}
+            />
+            <Legend wrapperStyle={{ fontSize: 11 }} />
+            {([...active] as MetricKey[]).map((m) => (
+              <Line key={m} type="monotone" dataKey={m}
+                stroke={METRIC_COLOR[m]} strokeWidth={2} dot={false} connectNulls />
+            ))}
+          </LineChart>
+        </ResponsiveContainer>
+      </CardContent>
+    </Card>
+  );
+}
+
+// ─── メインページ ──────────────────────────────────────────────────
 export default function SalesPage() {
   const router = useRouter();
   const { data: session, status } = useSession();
   const { viewAs } = useViewAs();
 
-  const [teamRecords, setTeamRecords] = useState<MonthRecord[]>([]);
-  const [aggregates, setAggregates]   = useState<AggregateRecord[]>([]);
-  const [loading, setLoading]         = useState(true);
+  const [stats, setStats] = useState<StatsResponse | null>(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     if (status === "unauthenticated") router.replace("/login");
@@ -68,36 +253,13 @@ export default function SalesPage() {
 
   const loadData = useCallback(async () => {
     if (status !== "authenticated") return;
-    // Admin が「営業マン画面で見る」場合は viewAs.team を使用
-    const team = (session?.user?.role === "Admin" && viewAs.role === "Sales")
-      ? viewAs.team
-      : session?.user?.team;
-    if (!team) { setLoading(false); return; }
-
     try {
-      const [statsRes, aggRes] = await Promise.all([
-        fetch(`/api/stats?team=${encodeURIComponent(team)}`),
-        fetch("/api/aggregates"),
-      ]);
-      if (statsRes.ok) {
-        const d = await statsRes.json();
-        // trend配列から月次実績を組み立て
-        const recs: MonthRecord[] = (d.trend ?? []).map((t: { year: number; month: number; overall: { dmCount: number; appoCount?: number; bSetCount?: number } }) => ({
-          year: t.year,
-          month: t.month,
-          dmCount: t.overall.dmCount,
-          appoCount: t.overall.bSetCount ?? 0,
-        }));
-        setTeamRecords(recs);
-      }
-      if (aggRes.ok) {
-        const d = await aggRes.json();
-        setAggregates(d.aggregates ?? []);
-      }
+      const res = await fetch("/api/stats");
+      if (res.ok) setStats(await res.json());
     } finally {
       setLoading(false);
     }
-  }, [status, session, viewAs]);
+  }, [status]);
 
   useEffect(() => { loadData(); }, [loadData]);
 
@@ -106,39 +268,46 @@ export default function SalesPage() {
   }
 
   const { nickname, name, image, role } = session?.user ?? {};
-  // Admin が viewAs Sales の場合は viewAs.team を使用
   const team = (role === "Admin" && viewAs.role === "Sales") ? viewAs.team : session?.user?.team;
   const userName = nickname ?? name ?? "営業マン";
+  const effectiveRole = (role === "Admin" && viewAs.role === "Sales") ? "Sales" : (role ?? "Sales");
 
   const now = new Date();
   const thisYear  = now.getFullYear();
   const thisMonth = now.getMonth() + 1;
-  const prevDate  = new Date(thisYear, thisMonth - 2, 1);
-  const prevYear  = prevDate.getFullYear();
-  const prevMonth = prevDate.getMonth() + 1;
 
-  const currRec = teamRecords.find((r) => r.year === thisYear && r.month === thisMonth);
-  const prevRec = teamRecords.find((r) => r.year === prevYear && r.month === prevMonth);
-  const currAgg = aggregates.find((a) => a.year === thisYear && a.month === thisMonth);
-  const prevAgg = aggregates.find((a) => a.year === prevYear && a.month === prevMonth);
-
-  // グラフ用（直近6ヶ月）
-  const recent6 = teamRecords.slice(-6);
-  const chartData = recent6.map((r) => {
-    const agg = aggregates.find((a) => a.year === r.year && a.month === r.month);
-    return {
-      label: `${r.year}/${String(r.month).padStart(2, "0")}`,
-      DM数: r.dmCount,
-      B設定数: r.appoCount,
-      B実施数: agg?.bExecCount ?? 0,
-      A設定数: agg?.aSetCount ?? 0,
-      A実施数: agg?.aExecCount ?? 0,
-    };
-  });
+  // 今月・前月のチーム数値
+  const currTeamStats = stats?.current.byTeam.find((b) => b.team === team) ?? null;
+  const prevTeamStats = stats?.previous.byTeam.find((b) => b.team === team) ?? null;
+  const currTeamAgg   = team ? (stats?.currentTeamAggregates[team] ?? null) : null;
+  const prevTeamAgg   = team ? (stats?.previousTeamAggregates[team] ?? null) : null;
 
   const myDbId = session?.user?.dbId ?? "";
 
-  const effectiveRole = (role === "Admin" && viewAs.role === "Sales") ? "Sales" : (role ?? "Sales");
+  // グラフデータ（チーム別、全履歴）
+  const chartData = (stats?.trend ?? []).map((t) => {
+    const ts = t.byTeam.find((b) => b.team === team) ?? { dmCount: 0, bSetCount: 0, bSetRate: 0 };
+    const ta: TeamAgg | null = team ? (t.teamAggregates?.[team] ?? null) : null;
+    const bSetC  = ta?.bSetCount ?? ts.bSetCount;
+    const bExecC = ta?.bExecCount ?? 0;
+    const aSetC  = ta?.aSetCount  ?? 0;
+    const aExecC = ta?.aExecCount ?? 0;
+    const conC   = ta?.contractCount ?? 0;
+    return {
+      label: t.label,
+      "DM数":    ts.dmCount,
+      "B設定":   bSetC,
+      "B設定率": pct(bSetC, ts.dmCount),
+      "B実施":   bExecC,
+      "B実施率": pct(bExecC, bSetC),
+      "A設定":   aSetC,
+      "A設定率": pct(aSetC, bExecC),
+      "A実施":   aExecC,
+      "A実施率": pct(aExecC, aSetC),
+      "契約":    conC,
+      "契約率":  pct(conC, aExecC),
+    };
+  });
 
   return (
     <PageLayout title="チーム実績" role={effectiveRole as "Sales"} userName={userName} userImage={image} userTeam={team ?? undefined}>
@@ -147,59 +316,19 @@ export default function SalesPage() {
         {/* アンケート通知 */}
         <SurveyNotice userId={myDbId} />
 
+        {/* 今月の数字（2列ペア） */}
         <div>
-          <p className="text-xs text-gray-400 mb-3">{team} · {thisYear}年{thisMonth}月</p>
-          {/* 今月の数字 */}
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-            <StatBox label="DM数"   curr={currRec?.dmCount   ?? 0} prev={prevRec?.dmCount   ?? 0} suffix="件" />
-            <StatBox label="B設定数（アポ）" curr={currRec?.appoCount ?? 0} prev={prevRec?.appoCount ?? 0} suffix="件" />
-            <StatBox label="B実施数" curr={currAgg?.bExecCount ?? 0} prev={prevAgg?.bExecCount ?? 0} suffix="件" />
-            <StatBox label="A設定数" curr={currAgg?.aSetCount  ?? 0} prev={prevAgg?.aSetCount  ?? 0} suffix="件" />
-            <StatBox label="A実施数" curr={currAgg?.aExecCount ?? 0} prev={prevAgg?.aExecCount ?? 0} suffix="件" />
-            <StatBox label="契約数"  curr={currAgg?.contractCount ?? 0} prev={prevAgg?.contractCount ?? 0} suffix="件" />
-          </div>
+          <p className="text-xs text-gray-400 mb-3">{team} · {thisYear}年{thisMonth}月（前月比）</p>
+          <StatsPairCard
+            curr={currTeamStats}
+            prev={prevTeamStats}
+            currAgg={currTeamAgg}
+            prevAgg={prevTeamAgg}
+          />
         </div>
 
-        {/* 月次グラフ */}
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-semibold text-gray-700">過去6ヶ月の推移</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <ResponsiveContainer width="100%" height={260}>
-              <BarChart data={chartData} margin={{ top: 5, right: 10, bottom: 5, left: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                <XAxis dataKey="label" tick={{ fontSize: 11 }} />
-                <YAxis tick={{ fontSize: 11 }} />
-                <Tooltip />
-                <Legend wrapperStyle={{ fontSize: 12 }} />
-                <Bar dataKey="DM数" fill="#6366f1" radius={[4, 4, 0, 0]} />
-                <Bar dataKey="B設定数" fill="#ec4899" radius={[4, 4, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-semibold text-gray-700">商談・成約推移</CardTitle>
-            <p className="text-xs text-gray-400">集計シートから同期したデータ</p>
-          </CardHeader>
-          <CardContent>
-            <ResponsiveContainer width="100%" height={260}>
-              <LineChart data={chartData} margin={{ top: 5, right: 10, bottom: 5, left: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                <XAxis dataKey="label" tick={{ fontSize: 11 }} />
-                <YAxis tick={{ fontSize: 11 }} />
-                <Tooltip />
-                <Legend wrapperStyle={{ fontSize: 12 }} />
-                <Line type="monotone" dataKey="B実施数" stroke="#6366f1" strokeWidth={2} dot={false} />
-                <Line type="monotone" dataKey="A設定数" stroke="#ec4899" strokeWidth={2} dot={false} />
-                <Line type="monotone" dataKey="A実施数" stroke="#f59e0b" strokeWidth={2} dot={false} />
-              </LineChart>
-            </ResponsiveContainer>
-          </CardContent>
-        </Card>
+        {/* 商談・成約推移グラフ */}
+        <PipelineChart data={chartData} />
 
       </div>
     </PageLayout>
