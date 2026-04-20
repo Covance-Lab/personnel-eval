@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import {
   Users, UserCheck, UserX, TrendingUp,
-  ChevronDown, ChevronUp,
+  ChevronDown, ChevronUp, Calendar,
 } from "lucide-react";
 import PageLayout from "@/components/layout/PageLayout";
 import {
@@ -28,6 +28,8 @@ interface UserRecord {
   completedStepCount: number;
   debuted: boolean;
   isChurned: boolean;
+  churned_at?: string | null;
+  paused_at?: string | null;
   dmCount: number;
   bSetCount: number;
   bSetRate: number | null;
@@ -95,8 +97,148 @@ function SalesMemoEditor({ userId, initialValue, onSaved }: { userId: string; in
   );
 }
 
-interface PreDebutStep {
-  step: number;
+// AM memo editor
+function AMMemoEditor({ userId, initialValue, onSaved }: { userId: string; initialValue: string; onSaved: (v: string) => void }) {
+  const [value, setValue] = useState(initialValue);
+  const [saving, setSaving] = useState(false);
+
+  async function save() {
+    if (value === initialValue) return;
+    setSaving(true);
+    const r = await fetch(`/api/roadmap/${userId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ am_memo: value }),
+    });
+    if (r.ok) onSaved(value);
+    setSaving(false);
+  }
+
+  return (
+    <div className="space-y-1.5">
+      <textarea
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
+        rows={3}
+        placeholder="メモを入力..."
+        className="w-full text-xs rounded-lg border border-gray-200 p-2.5 resize-none focus:outline-none focus:ring-1 focus:ring-indigo-400 bg-white"
+      />
+      <div className="flex items-center justify-between">
+        {saving ? <p className="text-xs text-gray-400">保存中...</p> : <span />}
+        <button
+          onClick={save}
+          disabled={saving || value === initialValue}
+          className="px-3 py-1 text-xs font-medium rounded-lg bg-indigo-600 text-white disabled:opacity-40 hover:bg-indigo-700 transition-colors"
+        >
+          保存
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// 離脱・休止ステータス変更
+function StatusChanger({ userId, churnedAt, pausedAt, onChanged }: {
+  userId: string;
+  churnedAt: string | null | undefined;
+  pausedAt: string | null | undefined;
+  onChanged: (field: "churned_at" | "paused_at", value: string | null) => void;
+}) {
+  const [showChurn, setShowChurn] = useState(false);
+  const [showPause, setShowPause] = useState(false);
+  const [churnDate, setChurnDate] = useState(churnedAt ? churnedAt.slice(0, 10) : "");
+  const [pauseDate, setPauseDate] = useState(pausedAt ? pausedAt.slice(0, 10) : "");
+  const [saving, setSaving] = useState(false);
+
+  async function saveField(field: "churned_at" | "paused_at", dateStr: string | null) {
+    setSaving(true);
+    await fetch(`/api/roadmap/${userId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ [field]: dateStr ? new Date(dateStr).toISOString() : null }),
+    });
+    onChanged(field, dateStr ? new Date(dateStr).toISOString() : null);
+    setSaving(false);
+    setShowChurn(false);
+    setShowPause(false);
+  }
+
+  return (
+    <div className="space-y-2">
+      <p className="text-xs font-semibold text-gray-700">ステータス変更</p>
+      <div className="flex gap-2 flex-wrap">
+        <button
+          onClick={() => { setShowChurn((v) => !v); setShowPause(false); }}
+          className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors ${
+            churnedAt ? "bg-red-50 text-red-700 border-red-200" : "bg-white text-gray-600 border-gray-200 hover:bg-red-50 hover:text-red-700 hover:border-red-200"
+          }`}
+        >
+          {churnedAt ? `離脱済み (${churnedAt.slice(0, 10)})` : "離脱"}
+        </button>
+        <button
+          onClick={() => { setShowPause((v) => !v); setShowChurn(false); }}
+          className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors ${
+            pausedAt ? "bg-amber-50 text-amber-700 border-amber-200" : "bg-white text-gray-600 border-gray-200 hover:bg-amber-50 hover:text-amber-700 hover:border-amber-200"
+          }`}
+        >
+          {pausedAt ? `休止中 (${pausedAt.slice(0, 10)})` : "休止"}
+        </button>
+        {(churnedAt || pausedAt) && (
+          <button
+            onClick={async () => {
+              setSaving(true);
+              if (churnedAt) { await fetch(`/api/roadmap/${userId}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ churned_at: null }) }); onChanged("churned_at", null); }
+              if (pausedAt)  { await fetch(`/api/roadmap/${userId}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ paused_at: null }) }); onChanged("paused_at", null); }
+              setSaving(false);
+            }}
+            disabled={saving}
+            className="px-3 py-1.5 rounded-lg text-xs font-medium border bg-white text-gray-400 border-gray-200 hover:bg-gray-50"
+          >
+            解除
+          </button>
+        )}
+      </div>
+      {showChurn && (
+        <div className="flex items-center gap-2 mt-1">
+          <input
+            type="date"
+            value={churnDate}
+            onChange={(e) => setChurnDate(e.target.value)}
+            className="text-xs rounded-lg border border-gray-200 px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-red-400"
+          />
+          <button
+            onClick={() => saveField("churned_at", churnDate || null)}
+            disabled={saving || !churnDate}
+            className="px-3 py-1.5 text-xs rounded-lg bg-red-600 text-white disabled:opacity-40 hover:bg-red-700"
+          >
+            {saving ? "保存中..." : "離脱日を保存"}
+          </button>
+        </div>
+      )}
+      {showPause && (
+        <div className="flex items-center gap-2 mt-1">
+          <input
+            type="date"
+            value={pauseDate}
+            onChange={(e) => setPauseDate(e.target.value)}
+            className="text-xs rounded-lg border border-gray-200 px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-amber-400"
+          />
+          <button
+            onClick={() => saveField("paused_at", pauseDate || null)}
+            disabled={saving || !pauseDate}
+            className="px-3 py-1.5 text-xs rounded-lg bg-amber-600 text-white disabled:opacity-40 hover:bg-amber-700"
+          >
+            {saving ? "保存中..." : "休止日を保存"}
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+interface PhaseCount {
+  phase: string;
+  label: string;
   count: number;
 }
 
@@ -104,7 +246,7 @@ interface Summary {
   total: number;
   debuted: number;
   churned: number;
-  preDebut: PreDebutStep[];
+  phaseCount: PhaseCount[];
 }
 
 interface EvalData {
@@ -209,13 +351,31 @@ function EvalPanel({ userId }: { userId: string }) {
 // ────────────────────────────────────────────
 // タブ付き展開行（アポインター用）
 // ────────────────────────────────────────────
-function AppointerExpandRow({ user: u, onMemoSaved }: { user: UserRecord; onMemoSaved: (id: string, memo: string) => void }) {
+function AppointerExpandRow({
+  user: u,
+  currentUserRole,
+  onMemoSaved,
+  onStatusChanged,
+}: {
+  user: UserRecord;
+  currentUserRole: string;
+  onMemoSaved: (id: string, field: "amMemo" | "salesMemo", memo: string) => void;
+  onStatusChanged: (id: string, field: "churned_at" | "paused_at", value: string | null) => void;
+}) {
   const [open, setOpen] = useState(false);
   const [tab, setTab] = useState<"status" | "eval" | "profile">("status");
 
   const avatar = u.icon_image_url ?? u.line_picture_url;
   const displayName = u.nickname ?? u.name ?? u.id;
   const bSetRateStr = u.bSetRate != null ? `${Number(u.bSetRate).toFixed(2)}%` : "—";
+  const progressPct = Math.round((u.completedStepCount / ROADMAP_STEPS.length) * 100);
+
+  const isAdmin = currentUserRole === "Admin";
+  const isAM    = currentUserRole === "AM";
+  const isSales = currentUserRole === "Sales";
+  const canEditAmMemo    = isAdmin || isAM;
+  const canSeeSalesMemo  = isAdmin || isSales;
+  const canChangeStatus  = isAdmin || isAM || isSales;
 
   const TABS = [
     { key: "status" as const,  label: "ステータス" },
@@ -284,28 +444,47 @@ function AppointerExpandRow({ user: u, onMemoSaved }: { user: UserRecord; onMemo
 
           {/* ステータス */}
           {tab === "status" && (
-            <div className="space-y-3">
+            <div className="space-y-4">
+
+              {/* 採用日 */}
+              <div className="flex items-center gap-2">
+                <Calendar className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+                <span className="text-xs text-gray-500">アポインター採用日：</span>
+                <span className="text-xs font-semibold text-gray-700">
+                  {u.created_at ? new Date(u.created_at).toLocaleDateString("ja-JP") : "—"}
+                </span>
+              </div>
+
+              {/* デビューまでの進捗 */}
               <div>
-                <p className="text-xs font-semibold text-gray-700 mb-2">デビューまでの進捗</p>
-                {/* プログレスバー */}
-                <div className="flex gap-1 mb-2">
-                  {ROADMAP_STEPS.map((_, i) => (
-                    <div key={i} className={`flex-1 h-2 rounded-full ${i < u.completedStepCount ? "bg-indigo-500" : "bg-gray-200"}`} />
-                  ))}
+                <div className="flex items-center justify-between mb-1.5">
+                  <p className="text-xs font-semibold text-gray-700">デビューまでの進捗</p>
+                  <span className="text-sm font-bold text-indigo-600">{progressPct}%</span>
                 </div>
-                <p className="text-xs text-gray-500 mb-3">{u.completedStepCount} / {ROADMAP_STEPS.length} 完了</p>
-                {/* フェーズ別ステップ一覧 */}
+                <div className="w-full bg-gray-200 rounded-full h-2 mb-1">
+                  <div
+                    className="bg-indigo-500 h-2 rounded-full transition-all"
+                    style={{ width: `${progressPct}%` }}
+                  />
+                </div>
+                <p className="text-xs text-gray-400">{u.completedStepCount} / {ROADMAP_STEPS.length} ステップ完了</p>
+              </div>
+
+              {/* フェーズ別ステップ */}
+              <div className="space-y-2">
                 {ROADMAP_PHASES.map((phase) => (
-                  <div key={phase.id} className="mb-2">
-                    <p className="text-xs font-medium text-gray-400 mb-0.5">{phase.label}</p>
+                  <div key={phase.id} className="bg-white rounded-lg border p-2.5">
+                    <p className="text-xs font-semibold text-gray-600 mb-1.5">{phase.label}</p>
                     <div className="space-y-0.5">
                       {phase.steps.map((step) => {
                         const idx = ROADMAP_STEPS.findIndex((r) => r.id === step.id);
-                        const done = idx < u.completedStepCount;
+                        const done   = idx < u.completedStepCount;
                         const active = idx === u.completedStepCount;
                         return (
-                          <div key={step.id} className={`flex items-center gap-1.5 text-xs px-2 py-0.5 rounded ${done ? "text-gray-400" : active ? "text-indigo-700 font-semibold" : "text-gray-300"}`}>
-                            <span>{done ? "✓" : active ? "●" : "○"}</span>
+                          <div key={step.id} className={`flex items-center gap-1.5 text-xs px-1.5 py-0.5 rounded ${
+                            done ? "text-gray-400" : active ? "text-indigo-700 font-semibold bg-indigo-50" : "text-gray-300"
+                          }`}>
+                            <span className="shrink-0">{done ? "✓" : active ? "●" : "○"}</span>
                             <span className={done ? "line-through" : ""}>{idx + 1}. {step.label}</span>
                           </div>
                         );
@@ -314,20 +493,40 @@ function AppointerExpandRow({ user: u, onMemoSaved }: { user: UserRecord; onMemo
                   </div>
                 ))}
               </div>
-              {u.amMemo && (
+
+              {/* 離脱・休止ボタン */}
+              {canChangeStatus && (
+                <StatusChanger
+                  userId={u.id}
+                  churnedAt={u.churned_at}
+                  pausedAt={u.paused_at}
+                  onChanged={(field, value) => onStatusChanged(u.id, field, value)}
+                />
+              )}
+
+              {/* AMのメモ（AM/Admin のみ表示・編集） */}
+              {canEditAmMemo && (
                 <div>
                   <p className="text-xs font-semibold text-gray-700 mb-1">AMのメモ</p>
-                  <p className="text-xs text-gray-600 bg-white rounded-lg border p-3 whitespace-pre-wrap">{u.amMemo}</p>
+                  <AMMemoEditor
+                    userId={u.id}
+                    initialValue={u.amMemo}
+                    onSaved={(v) => onMemoSaved(u.id, "amMemo", v)}
+                  />
                 </div>
               )}
-              <div>
-                <p className="text-xs font-semibold text-gray-700 mb-1">営業マンのメモ</p>
-                <SalesMemoEditor
-                  userId={u.id}
-                  initialValue={u.salesMemo}
-                  onSaved={(v) => onMemoSaved(u.id, v)}
-                />
-              </div>
+
+              {/* 営業マンのメモ（Sales/Admin のみ表示・編集） */}
+              {canSeeSalesMemo && (
+                <div>
+                  <p className="text-xs font-semibold text-gray-700 mb-1">営業マンのメモ</p>
+                  <SalesMemoEditor
+                    userId={u.id}
+                    initialValue={u.salesMemo}
+                    onSaved={(v) => onMemoSaved(u.id, "salesMemo", v)}
+                  />
+                </div>
+              )}
             </div>
           )}
 
@@ -338,21 +537,19 @@ function AppointerExpandRow({ user: u, onMemoSaved }: { user: UserRecord; onMemo
           {tab === "profile" && (
             <div className="bg-white rounded-lg border p-3 space-y-1.5 text-xs">
               {[
-                { label: "チーム",    value: u.team ?? "—" },
+                { label: "チーム",   value: u.team ?? "—" },
                 { label: "担当AM",   value: u.amName ?? "—" },
-                { label: "登録日",    value: u.created_at ? new Date(u.created_at).toLocaleDateString("ja-JP") : "—" },
-                { label: "ステータス", value: null },
-              ].map(({ label, value }) => value !== null ? (
+                { label: "採用日",   value: u.created_at ? new Date(u.created_at).toLocaleDateString("ja-JP") : "—" },
+              ].map(({ label, value }) => (
                 <div key={label} className="flex gap-2">
                   <span className="text-gray-400 w-20 shrink-0">{label}</span>
                   <span className="text-gray-700">{value}</span>
                 </div>
-              ) : (
-                <div key={label} className="flex gap-2 items-center">
-                  <span className="text-gray-400 w-20 shrink-0">{label}</span>
-                  <StatusBadge user={u} />
-                </div>
               ))}
+              <div className="flex gap-2 items-center">
+                <span className="text-gray-400 w-20 shrink-0">ステータス</span>
+                <StatusBadge user={u} />
+              </div>
             </div>
           )}
         </div>
@@ -531,8 +728,9 @@ function UserRow({ user: u }: { user: UserRecord }) {
 
 function StatusBadge({ user: u }: { user: UserRecord }) {
   if (u.role === "AM") return <Badge variant="outline" className="text-xs">アポインターマネージャー</Badge>;
-  if (u.isChurned) return <Badge className="bg-red-100 text-red-700 text-xs border-0">離脱</Badge>;
-  if (u.debuted) return <Badge className="bg-green-100 text-green-700 text-xs border-0">デビュー済み</Badge>;
+  if (u.churned_at || u.isChurned) return <Badge className="bg-red-100 text-red-700 text-xs border-0">離脱</Badge>;
+  if (u.paused_at)  return <Badge className="bg-amber-100 text-amber-700 text-xs border-0">休止中</Badge>;
+  if (u.debuted)    return <Badge className="bg-green-100 text-green-700 text-xs border-0">デビュー済み</Badge>;
   return <Badge className="bg-indigo-100 text-indigo-700 text-xs border-0">デビュー前</Badge>;
 }
 
@@ -599,7 +797,7 @@ export default function HRPage() {
                     {[
                       { icon: <Users className="w-3.5 h-3.5 text-gray-400" />, label: "アポインター総数", value: summary.total, color: "text-gray-800" },
                       { icon: <UserCheck className="w-3.5 h-3.5 text-green-500" />, label: "デビュー済み", value: summary.debuted, color: "text-green-600" },
-                      { icon: <TrendingUp className="w-3.5 h-3.5 text-indigo-500" />, label: "デビュー前", value: summary.preDebut.reduce((s, p) => s + p.count, 0), color: "text-indigo-600" },
+                      { icon: <TrendingUp className="w-3.5 h-3.5 text-indigo-500" />, label: "デビュー前", value: (summary.phaseCount ?? []).reduce((s, p) => s + p.count, 0), color: "text-indigo-600" },
                       { icon: <UserX className="w-3.5 h-3.5 text-red-400" />, label: "当月離脱", value: summary.churned, color: "text-red-500" },
                     ].map(({ icon, label, value, color }) => (
                       <div key={label} className="flex items-center justify-between bg-gray-50 rounded-lg px-3 py-2 border">
@@ -611,25 +809,14 @@ export default function HRPage() {
                       </div>
                     ))}
                   </div>
-                  {/* 右列：STEP別（ツールチップ付き） */}
+                  {/* 右列：フェーズ別 */}
                   <div className="space-y-2">
-                    {summary.preDebut.map(({ step, count }) => {
-                      const stepLabel  = step === 0 ? "未着手" : `STEP${step}`;
-                      const stepDetail = step >= 1 ? (ROADMAP_STEPS[step - 1]?.label ?? "") : "";
-                      return (
-                        <div key={step} className="relative group flex items-center justify-between bg-gray-50 rounded-lg px-3 py-2 border cursor-default">
-                          <span className="text-xs text-gray-500">{stepLabel}</span>
-                          <span className="text-lg font-bold text-indigo-600">{count}<span className="text-xs font-normal text-gray-400 ml-0.5">人</span></span>
-                          {stepDetail && (
-                            <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 hidden group-hover:block z-20 w-44 bg-gray-800 text-white text-xs rounded-lg px-2.5 py-2 text-center pointer-events-none shadow-lg">
-                              <p className="font-semibold mb-0.5">{stepLabel}</p>
-                              <p className="text-gray-300">{stepDetail}</p>
-                              <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-gray-800" />
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })}
+                    {(summary.phaseCount ?? []).map(({ label, count }) => (
+                      <div key={label} className="flex items-center justify-between bg-gray-50 rounded-lg px-3 py-2 border">
+                        <span className="text-xs text-gray-500">{label}</span>
+                        <span className="text-lg font-bold text-indigo-600">{count}<span className="text-xs font-normal text-gray-400 ml-0.5">人</span></span>
+                      </div>
+                    ))}
                   </div>
                 </div>
               </CardContent>
@@ -653,7 +840,9 @@ export default function HRPage() {
                     <AppointerExpandRow
                       key={u.id}
                       user={u}
-                      onMemoSaved={(id, memo) => setUsers((prev) => prev.map((p) => p.id === id ? { ...p, salesMemo: memo } : p))}
+                      currentUserRole={role ?? ""}
+                      onMemoSaved={(id, field, memo) => setUsers((prev) => prev.map((p) => p.id === id ? { ...p, [field]: memo } : p))}
+                      onStatusChanged={(id, field, value) => setUsers((prev) => prev.map((p) => p.id === id ? { ...p, [field]: value } : p))}
                     />
                   ))}
                 </div>
@@ -797,7 +986,9 @@ export default function HRPage() {
                   <AppointerExpandRow
                     key={u.id}
                     user={u}
-                    onMemoSaved={(id, memo) => setUsers((prev) => prev.map((p) => p.id === id ? { ...p, salesMemo: memo } : p))}
+                    currentUserRole={role ?? ""}
+                    onMemoSaved={(id, field, memo) => setUsers((prev) => prev.map((p) => p.id === id ? { ...p, [field]: memo } : p))}
+                    onStatusChanged={(id, field, value) => setUsers((prev) => prev.map((p) => p.id === id ? { ...p, [field]: value } : p))}
                   />
                 ))}
               </div>

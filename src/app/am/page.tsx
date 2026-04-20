@@ -329,6 +329,36 @@ export default function AMPage() {
           <p>DM数: {GOALS.dmCount.toLocaleString()}通　B設定数: {GOALS.bSetCount}件　B設定率: {GOALS.bSetRate}%</p>
         </div>
 
+        {/* 過去月 DM数サマリーテーブル */}
+        {trendData.length > 0 && (
+          <div className="bg-white rounded-2xl border p-4 space-y-3">
+            <p className="text-xs font-semibold text-gray-600">月別 管轄アポインター合計</p>
+            <p className="text-xs text-gray-400">スプレッドシートから同期済みのデータを集計しています</p>
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="border-b">
+                    <th className="text-left py-1.5 px-2 font-medium text-gray-500">月</th>
+                    <th className="text-right py-1.5 px-2 font-medium text-gray-500">DM数</th>
+                    <th className="text-right py-1.5 px-2 font-medium text-gray-500">B設定数</th>
+                    <th className="text-right py-1.5 px-2 font-medium text-gray-500">B設定率</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {[...trendData].reverse().slice(0, 6).map((d) => (
+                    <tr key={d.label}>
+                      <td className="py-1.5 px-2 text-gray-700 font-medium">{d.label}</td>
+                      <td className="py-1.5 px-2 text-right text-gray-800">{Number(d.DM数).toLocaleString()}</td>
+                      <td className="py-1.5 px-2 text-right text-gray-800">{Number(d.B設定数).toLocaleString()}</td>
+                      <td className="py-1.5 px-2 text-right text-gray-800">{Number(d.B設定率).toFixed(2)}%</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
         {/* 月次推移グラフ — アポインターチーム */}
         {trendData.length > 0 && (
           <AMTrendChart data={trendData} />

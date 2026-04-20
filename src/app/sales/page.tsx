@@ -346,17 +346,6 @@ export default function SalesPage() {
 
   const myDbId = session?.user?.dbId ?? "";
 
-  // 全チームDMグラフデータ
-  const allTeamsDmData = (stats?.trend ?? []).map((t) => {
-    const row: { label: string; [team: string]: string | number } = { label: t.label };
-    for (const tm of ALL_TEAMS) {
-      const ta = t.teamAggregates?.[tm];
-      const ts = t.byTeam.find((b) => b.team === tm);
-      row[tm] = ta?.dmCount ?? ts?.dmCount ?? 0;
-    }
-    return row;
-  });
-
   // グラフデータ（チーム別、全履歴）
   const chartData = (stats?.trend ?? []).map((t) => {
     const ts = t.byTeam.find((b) => b.team === team) ?? { dmCount: 0, bSetCount: 0, bSetRate: 0 };
@@ -368,7 +357,7 @@ export default function SalesPage() {
     const conC   = ta?.contractCount ?? 0;
     return {
       label: t.label,
-      "DM数":    ts.dmCount,
+      "DM数":    ta?.dmCount ?? ts.dmCount,
       "B設定":   bSetC,
       "B設定率": pct(bSetC, ts.dmCount),
       "B実施":   bExecC,
@@ -399,9 +388,6 @@ export default function SalesPage() {
             prevAgg={prevTeamAgg}
           />
         </div>
-
-        {/* チーム別DM数推移グラフ */}
-        <AllTeamsDmChart data={allTeamsDmData} />
 
         {/* 商談・成約推移グラフ */}
         <PipelineChart data={chartData} />

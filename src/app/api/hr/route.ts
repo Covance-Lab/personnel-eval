@@ -66,7 +66,22 @@ export async function GET() {
     usersQuery = usersQuery.in("id", targetIds);
   }
 
-  const { data: users } = await usersQuery;
+  const { data: usersRaw } = await usersQuery;
+
+  // churned_at / paused_at を別クエリで取得（SELECT に追加）
+  const userIds = (usersRaw ?? []).map((u) => u.id);
+  const { data: userStatus } = userIds.length > 0
+    ? await supabaseAdmin
+        .from("users")
+        .select("id, churned_at, paused_at")
+        .in("id", userIds)
+    : { data: [] };
+  const statusMap = new Map((userStatus ?? []).map((u) => [u.id, u]));
+  const users = (usersRaw ?? []).map((u) => ({
+    ...u,
+    churned_at: statusMap.get(u.id)?.churned_at ?? null,
+    paused_at:  statusMap.get(u.id)?.paused_at  ?? null,
+  }));
 
   // ロードマップ（am_memo・sales_memo含む）
   const { data: roadmaps } = await supabaseAdmin
@@ -115,7 +130,7 @@ export async function GET() {
   const enriched = (users ?? []).map((u) => {
     const roadmap   = roadmapMap.get(u.id);
     const stepCount = roadmap?.completed_step_count ?? 0;
-    const debuted   = stepCount >= 6;
+    const debuted   = stepCount >= 17;
     const isChurned = prevActive.has(u.id) && !currActive.has(u.id);
     const perf      = currPerfMap.get(u.id);
 
@@ -127,22 +142,27 @@ export async function GET() {
       dmCount:              perf?.dm_count         ?? 0,
       bSetCount:            perf?.appo_count        ?? 0,
       bSetRate:             perf?.appointment_rate != null ? Number(perf.appointment_rate) : null,
-      amMemo:               roadmap?.am_memo         ?? "",
-      salesMemo:            roadmap?.sales_memo      ?? "",
+      amMemo:               roadmap?.am_memo    ?? "",
+      salesMemo:            roadmap?.sales_memo ?? "",
       amName:               u.education_mentor_user_id ? (amMap.get(u.education_mentor_user_id) ?? null) : null,
+      churned_at:           u.churned_at ?? null,
+      paused_at:            u.paused_at  ?? null,
     };
   });
 
   // Appointerのみでサマリー計算
   const appointers = enriched.filter((u) => u.role === "Appointer");
+  const preDebutUsers = appointers.filter((u) => !u.debuted);
   const summary = {
     total:   appointers.length,
     debuted: appointers.filter((u) => u.debuted && !u.isChurned).length,
     churned: appointers.filter((u) => u.isChurned).length,
-    preDebut: Array.from({ length: 7 }, (_, i) => ({
-      step: i,
-      count: appointers.filter((u) => !u.debuted && u.completedStepCount === i).length,
-    })),
+    phaseCount: [
+      { phase: "phase1", label: "Phase 1: 基礎構築",       count: preDebutUsers.filter((u) => u.completedStepCount < 4).length },
+      { phase: "phase2", label: "Phase 2: アカウント成長",  count: preDebutUsers.filter((u) => u.completedStepCount >= 4 && u.completedStepCount < 7).length },
+      { phase: "phase3", label: "Phase 3: コンテンツ運用",  count: preDebutUsers.filter((u) => u.completedStepCount >= 7 && u.completedStepCount < 12).length },
+      { phase: "phase4", label: "Phase 4: 実践・自走",      count: preDebutUsers.filter((u) => u.completedStepCount >= 12).length },
+    ],
   };
 
   return NextResponse.json({ users: enriched, summary });

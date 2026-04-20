@@ -150,8 +150,18 @@ export async function PATCH(req: NextRequest, { params }: RouteParams) {
     if ("sales_memo" in body) updates.sales_memo = body.sales_memo;
   }
 
+  // AM/Sales/Admin: churned_at・paused_at をユーザーテーブルに更新
+  if (isAdmin || isAM || isSales) {
+    const userUpdates: Record<string, unknown> = {};
+    if ("churned_at" in body) userUpdates.churned_at = body.churned_at;
+    if ("paused_at"  in body) userUpdates.paused_at  = body.paused_at;
+    if (Object.keys(userUpdates).length > 0) {
+      await supabaseAdmin.from("users").update(userUpdates).eq("id", userId);
+    }
+  }
+
   if (Object.keys(updates).length === 0) {
-    return NextResponse.json({ error: "No valid fields to update" }, { status: 400 });
+    return NextResponse.json({ ok: true });
   }
 
   const { data, error } = await supabaseAdmin
