@@ -482,6 +482,80 @@ function AggregateSheetForm() {
   );
 }
 
+// ─── メンバーマスタシート設定 ─────────────────────────────────────
+
+function MemberMasterSheetForm() {
+  const [url, setUrl]             = useState("");
+  const [spreadsheetId, setSpreadsheetId] = useState<string | null>(null);
+  const [updatedAt, setUpdatedAt] = useState<string | null>(null);
+  const [saving, setSaving]       = useState(false);
+  const [msg, setMsg]             = useState<{ ok: boolean; text: string } | null>(null);
+
+  const load = useCallback(async () => {
+    const r = await fetch("/api/sheet-config?team=メンバーマスタ");
+    if (r.ok) {
+      const { configs } = await r.json();
+      const c = configs?.[0] ?? null;
+      if (c) { setUrl(c.spreadsheetUrl); setSpreadsheetId(c.spreadsheetId); setUpdatedAt(c.updatedAt); }
+    }
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  async function handleSave() {
+    if (!url.trim()) return;
+    setSaving(true); setMsg(null);
+    const r = await fetch("/api/sheet-config", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ team: "メンバーマスタ", spreadsheetUrl: url.trim(), sheetName: "メンバーマスタ" }),
+    });
+    const d = await r.json();
+    if (r.ok) { setMsg({ ok: true, text: `保存しました (ID: ${d.config?.spreadsheetId})` }); load(); }
+    else       { setMsg({ ok: false, text: d.error ?? "保存に失敗しました" }); }
+    setSaving(false);
+  }
+
+  return (
+    <Card className="border-l-4 border-l-green-400">
+      <CardHeader className="pb-3">
+        <div className="flex items-center justify-between">
+          <CardTitle className="text-base flex items-center gap-2">
+            <Users className="w-4 h-4" /> メンバーマスタシート設定
+          </CardTitle>
+          {spreadsheetId && <Badge variant="secondary" className="text-xs">連携済み</Badge>}
+        </div>
+        <p className="text-xs text-gray-500">
+          ユーザーがセットアップを完了すると、このシートの「メンバーマスタ」タブに自動記録されます。
+        </p>
+        {spreadsheetId && <p className="text-xs text-gray-400 truncate">ID: {spreadsheetId} · 更新: {updatedAt ? new Date(updatedAt).toLocaleDateString("ja-JP") : "—"}</p>}
+      </CardHeader>
+      <CardContent className="space-y-3">
+        <div className="space-y-1.5">
+          <label className="text-xs font-medium text-gray-700">スプレッドシートURL</label>
+          <Input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://docs.google.com/spreadsheets/d/..." className="text-xs font-mono" />
+          <p className="text-xs text-gray-400">「メンバーマスタ」タブに A:LINE ID / B:フルネーム / C:あだ名 / D:役職 / E:チーム / F:教育係 / G:日時 が書き込まれます。</p>
+        </div>
+        {msg && (
+          <div className={`flex items-center gap-1.5 rounded px-3 py-2 text-xs ${msg.ok ? "bg-green-50 text-green-700" : "bg-red-50 text-red-700"}`}>
+            {msg.ok ? <CheckCircle2 className="w-3.5 h-3.5" /> : <AlertCircle className="w-3.5 h-3.5" />}
+            {msg.text}
+          </div>
+        )}
+        <div className="flex gap-2 pt-1">
+          <Button onClick={handleSave} disabled={saving || !url.trim()} size="sm">URLを保存</Button>
+          {spreadsheetId && (
+            <Button onClick={async () => { await fetch("/api/sheet-config?team=メンバーマスタ", { method: "DELETE" }); setSpreadsheetId(null); setUrl(""); }}
+              variant="ghost" size="sm" className="gap-1.5 text-red-500 hover:text-red-700 hover:bg-red-50 ml-auto">
+              <Trash2 className="w-3.5 h-3.5" /> リセット
+            </Button>
+          )}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
 // ─── ユーザー管理テーブル ─────────────────────────────────────────
 
 const ROLES: Role[] = ["Admin", "AM", "Bridge", "Closer", "Appointer", "Sales"];
@@ -1303,6 +1377,7 @@ export default function AdminPage() {
           <h2 className="text-sm font-semibold text-gray-700">スプレッドシート連携設定</h2>
           <TeamSheetForm key="全チーム" team="全チーム" onSynced={() => setSyncKey((k) => k + 1)} />
           <AggregateSheetForm />
+          <MemberMasterSheetForm />
         </div>
 
         {/* テストユーザー管理（TEST_MODE のみ） */}

@@ -3,7 +3,7 @@
  * PATCH /api/user/me — プロフィール更新（name, nickname, team, etc.）
  */
 
-import { NextRequest, NextResponse } from "next/server";
+import { type NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 
@@ -79,6 +79,16 @@ export async function PATCH(req: NextRequest) {
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+
+  // 初回セットアップ完了時: メンバーマスタに非同期書き込み（失敗してもレスポンスには影響しない）
+  const isSettingupComplete = body.setup_completed === true && !currentUser?.setup_completed;
+  if (isSettingupComplete) {
+    const baseUrl = process.env.NEXTAUTH_URL ?? "http://localhost:3000";
+    fetch(`${baseUrl}/api/sheets/write-member-master`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Cookie: req.headers.get("cookie") ?? "" },
+    }).catch((e) => console.error("[user/me] write-member-master failed:", e));
   }
 
   return NextResponse.json({ user: data });

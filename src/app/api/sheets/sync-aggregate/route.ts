@@ -17,7 +17,7 @@ import { auth } from "@/auth";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 import { fetchSheetRange } from "@/lib/sheets/sheetsClient";
 
-function parseNum(value: string | undefined): number {
+function parseNum(value: string | number | undefined): number {
   if (!value) return 0;
   const n = Number(String(value).replace(/[^0-9.-]/g, ""));
   return isNaN(n) ? 0 : n;
@@ -52,7 +52,7 @@ export async function POST(req: NextRequest) {
   const sheetName = `${String(month).padStart(2, "0")}月`;
 
   // F列を含む範囲を取得 (A1:F15 で十分)
-  let rows: string[][];
+  let rows: (string | number)[][];
   let isMock = false;
   try {
     const result = await fetchSheetRange({

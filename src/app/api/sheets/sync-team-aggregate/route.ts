@@ -23,8 +23,8 @@ import { fetchSheetRange } from "@/lib/sheets/sheetsClient";
 
 const CONTRACT_VALUES = ["成約(全額着金)", "成約(一部着金)"];
 
-function isCircle(v: string | undefined): boolean {
-  return (v ?? "").trim() === "◎";
+function isCircle(v: string | number | undefined): boolean {
+  return String(v ?? "").trim() === "◎";
 }
 
 
@@ -69,7 +69,7 @@ export async function POST(req: NextRequest) {
   const sheetName = `${String(month).padStart(2, "0")}月`;
 
   // A17:U1000 でデータ行を取得 + F7（全体DM数）・F8（全体B設定数）を取得
-  let rows: string[][];
+  let rows: (string | number)[][];
   let isMock = false;
   let overallDmCount = 0;
   let overallBSetFromSheet = 0;
@@ -93,7 +93,7 @@ export async function POST(req: NextRequest) {
   const overall = emptyCount();
 
   for (const row of rows) {
-    const team = (row[0] ?? "").trim();
+    const team = String(row[0] ?? "").trim();
     if (!team) continue; // チーム名が空の行はスキップ
 
     if (!teamMap.has(team)) teamMap.set(team, emptyCount());
@@ -106,7 +106,7 @@ export async function POST(req: NextRequest) {
     if (isCircle(row[11]))  { tc.bExecCount++;    overall.bExecCount++;    } // L列: B実施
     if (isCircle(row[13]))  { tc.aSetCount++;     overall.aSetCount++;     } // N列: A設定
     if (isCircle(row[18]))  { tc.aExecCount++;    overall.aExecCount++;    } // S列: A実施
-    if (CONTRACT_VALUES.includes((row[20] ?? "").trim())) { tc.contractCount++; overall.contractCount++; } // U列: 契約
+    if (CONTRACT_VALUES.includes(String(row[20] ?? "").trim())) { tc.contractCount++; overall.contractCount++; } // U列: 契約
   }
 
   const syncedAt = new Date().toISOString();
@@ -149,6 +149,6 @@ export async function POST(req: NextRequest) {
     month,
     overall,
     byTeam: summary,
-    rowCount: rows.filter((r) => (r[0] ?? "").trim()).length,
+    rowCount: rows.filter((r) => String(r[0] ?? "").trim()).length,
   });
 }

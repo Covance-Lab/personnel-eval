@@ -10,12 +10,12 @@ import SurveyNotice from "@/components/survey/SurveyNotice";
 import { useViewAs } from "@/contexts/ViewAsContext";
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip,
-  Legend, ResponsiveContainer,
+  Legend, ResponsiveContainer, BarChart, Bar,
 } from "recharts";
 
 // ─── 型 ────────────────────────────────────────────────────────────
 interface TeamStats { team: string; dmCount: number; bSetCount: number; bSetRate: number; appointerCount: number; }
-interface TeamAgg   { bSetCount: number; bExecCount: number; aSetCount: number; aExecCount: number; contractCount: number; }
+interface TeamAgg   { dmCount?: number; bSetCount: number; bExecCount: number; aSetCount: number; aExecCount: number; contractCount: number; }
 interface TrendPoint {
   year: number; month: number; label: string;
   byTeam: TeamStats[];
@@ -232,6 +232,68 @@ function PipelineChart({ data }: { data: Record<string, number | string>[] }) {
   );
 }
 
+// ─── 全チームDM推移グラフ ─────────────────────────────────────────
+
+const TEAM_DM_COLORS: Record<string, string> = {
+  辻利:    "#6366f1",
+  LUMIA:   "#ec4899",
+  Covance: "#f59e0b",
+};
+const ALL_TEAMS = ["辻利", "LUMIA", "Covance"] as const;
+
+function AllTeamsDmChart({
+  data,
+}: {
+  data: { label: string; [team: string]: number | string }[];
+}) {
+  const [chartType, setChartType] = useState<"line" | "bar">("bar");
+
+  return (
+    <Card>
+      <CardHeader className="pb-3">
+        <div className="flex items-center justify-between">
+          <CardTitle className="text-sm font-semibold text-gray-700">チーム別DM数推移</CardTitle>
+          <div className="flex gap-1 bg-gray-100 rounded-lg p-0.5">
+            {(["bar", "line"] as const).map((t) => (
+              <button key={t} onClick={() => setChartType(t)}
+                className={`px-3 py-1 rounded-md text-xs font-medium transition-colors ${chartType === t ? "bg-white text-indigo-700 shadow-sm" : "text-gray-500"}`}>
+                {t === "bar" ? "棒" : "折線"}
+              </button>
+            ))}
+          </div>
+        </div>
+      </CardHeader>
+      <CardContent>
+        <ResponsiveContainer width="100%" height={260}>
+          {chartType === "bar" ? (
+            <BarChart data={data} margin={{ top: 5, right: 16, bottom: 5, left: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+              <XAxis dataKey="label" tick={{ fontSize: 10 }} />
+              <YAxis tick={{ fontSize: 10 }} tickFormatter={(v) => v >= 1000 ? `${(v / 1000).toFixed(0)}K` : String(v)} />
+              <Tooltip formatter={(value, name) => [`${Number(value).toLocaleString()}件`, name]} />
+              <Legend wrapperStyle={{ fontSize: 11 }} />
+              {ALL_TEAMS.map((t) => (
+                <Bar key={t} dataKey={t} fill={TEAM_DM_COLORS[t]} radius={[3, 3, 0, 0]} />
+              ))}
+            </BarChart>
+          ) : (
+            <LineChart data={data} margin={{ top: 5, right: 16, bottom: 5, left: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+              <XAxis dataKey="label" tick={{ fontSize: 10 }} />
+              <YAxis tick={{ fontSize: 10 }} tickFormatter={(v) => v >= 1000 ? `${(v / 1000).toFixed(0)}K` : String(v)} />
+              <Tooltip formatter={(value, name) => [`${Number(value).toLocaleString()}件`, name]} />
+              <Legend wrapperStyle={{ fontSize: 11 }} />
+              {ALL_TEAMS.map((t) => (
+                <Line key={t} type="monotone" dataKey={t} stroke={TEAM_DM_COLORS[t]} strokeWidth={2} dot={false} connectNulls />
+              ))}
+            </LineChart>
+          )}
+        </ResponsiveContainer>
+      </CardContent>
+    </Card>
+  );
+}
+
 // ─── メインページ ──────────────────────────────────────────────────
 export default function SalesPage() {
   const router = useRouter();
@@ -284,6 +346,17 @@ export default function SalesPage() {
 
   const myDbId = session?.user?.dbId ?? "";
 
+  // 全チームDMグラフデータ
+  const allTeamsDmData = (stats?.trend ?? []).map((t) => {
+    const row: { label: string; [team: string]: string | number } = { label: t.label };
+    for (const tm of ALL_TEAMS) {
+      const ta = t.teamAggregates?.[tm];
+      const ts = t.byTeam.find((b) => b.team === tm);
+      row[tm] = ta?.dmCount ?? ts?.dmCount ?? 0;
+    }
+    return row;
+  });
+
   // グラフデータ（チーム別、全履歴）
   const chartData = (stats?.trend ?? []).map((t) => {
     const ts = t.byTeam.find((b) => b.team === team) ?? { dmCount: 0, bSetCount: 0, bSetRate: 0 };
@@ -326,6 +399,9 @@ export default function SalesPage() {
             prevAgg={prevTeamAgg}
           />
         </div>
+
+        {/* チーム別DM数推移グラフ */}
+        <AllTeamsDmChart data={allTeamsDmData} />
 
         {/* 商談・成約推移グラフ */}
         <PipelineChart data={chartData} />

@@ -51,6 +51,13 @@ export default function AppointerPage() {
     if (!myId) { setLoading(false); return; }
 
     try {
+      // スプレッドシートから最新実績を自動取得（見つからなければ0、エラー時は無視）
+      fetch("/api/sheets/auto-sync-user", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ year: thisYear, month: thisMonth }),
+      }).catch(() => {});
+
       const [rdRes, perfRes] = await Promise.all([
         fetch(`/api/roadmap/${myId}`),
         fetch(`/api/performance?userId=${myId}`),

@@ -55,7 +55,7 @@ export async function runSyncService(
   const syncedAt = new Date().toISOString();
 
   // ─── 1. Sheets からデータ取得 ────────────────────────────────
-  let rows: string[][];
+  let rows: (string | number)[][];
   let isMock = false;
   try {
     const result = await fetchSheetRange({
