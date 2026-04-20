@@ -46,6 +46,10 @@ function TeamSheetForm({ team, onSynced }: { team: TeamGroup | "全チーム"; o
   const [startRow, setStartRow] = useState("2");
   const [syncing, setSyncing]   = useState(false);
   const [syncResult, setSyncResult] = useState<{ ok: boolean; msg: string; mock?: boolean } | null>(null);
+  const now2 = new Date();
+  const [dmSyncYear, setDmSyncYear]     = useState(String(now2.getFullYear()));
+  const [dmSyncing, setDmSyncing]       = useState(false);
+  const [dmSyncResult, setDmSyncResult] = useState<{ ok: boolean; msg: string; mock?: boolean } | null>(null);
 
   const load = useCallback(async () => {
     const res = await fetch(`/api/sheet-config?team=${encodeURIComponent(team)}`);
@@ -101,6 +105,26 @@ function TeamSheetForm({ team, onSynced }: { team: TeamGroup | "全チーム"; o
     });
     if (data.ok) onSynced();
     setSyncing(false);
+  }
+
+  async function handleSyncAllDm() {
+    setDmSyncing(true); setDmSyncResult(null);
+    const res = await fetch("/api/sheets/sync-all-team-dm", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ year: parseInt(dmSyncYear) }),
+    });
+    const data = await res.json();
+    if (res.ok && data.ok) {
+      const months = (data.syncedMonths as number[]).join("・");
+      setDmSyncResult({
+        ok: true, mock: data.mockMode,
+        msg: `${dmSyncYear}年 ${months}月 のDM数を同期しました`,
+      });
+    } else {
+      setDmSyncResult({ ok: false, msg: data.error ?? "同期に失敗しました" });
+    }
+    setDmSyncing(false);
   }
 
   return (
@@ -178,6 +202,45 @@ function TeamSheetForm({ team, onSynced }: { team: TeamGroup | "全チーム"; o
               {syncResult.mock && <span className="ml-1 bg-amber-100 text-amber-700 rounded px-1.5 py-0.5 flex items-center gap-1"><FlaskConical className="w-3 h-3" />モック</span>}
             </div>
             <p>{syncResult.msg}</p>
+          </div>
+        )}
+
+        {/* 全月DM数一括同期（全チームのみ） */}
+        {team === "全チーム" && (
+          <div className="border-t pt-3 space-y-2">
+            <p className="text-xs font-medium text-gray-600">チーム別DM数を全月一括同期</p>
+            <p className="text-xs text-gray-400">A列=チーム名・C列=DM数の各月タブ（1月〜12月）を走査し、チーム別DM数を保存します。</p>
+            <div className="flex flex-wrap gap-2 items-center">
+              <select
+                value={dmSyncYear}
+                onChange={(e) => setDmSyncYear(e.target.value)}
+                className="h-9 rounded border bg-white px-2 text-xs w-24"
+              >
+                {Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - i).map((y) => (
+                  <option key={y} value={y}>{y}年</option>
+                ))}
+              </select>
+              <Button
+                onClick={handleSyncAllDm}
+                disabled={dmSyncing || !cfg}
+                variant="outline"
+                size="sm"
+                className="gap-1.5"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${dmSyncing ? "animate-spin" : ""}`} />
+                {dmSyncing ? "集計中..." : "全月DM数を同期"}
+              </Button>
+            </div>
+            {dmSyncResult && (
+              <div className={`rounded-lg px-3 py-2 text-xs space-y-0.5 ${dmSyncResult.ok ? "bg-green-50 text-green-800" : "bg-red-50 text-red-800"}`}>
+                <div className="flex items-center gap-1.5 font-semibold">
+                  {dmSyncResult.ok ? <CheckCircle2 className="w-3.5 h-3.5" /> : <AlertCircle className="w-3.5 h-3.5" />}
+                  {dmSyncResult.ok ? "同期完了" : "同期エラー"}
+                  {dmSyncResult.mock && <span className="ml-1 bg-amber-100 text-amber-700 rounded px-1.5 py-0.5 flex items-center gap-1"><FlaskConical className="w-3 h-3" />モック</span>}
+                </div>
+                <p>{dmSyncResult.msg}</p>
+              </div>
+            )}
           </div>
         )}
       </CardContent>
