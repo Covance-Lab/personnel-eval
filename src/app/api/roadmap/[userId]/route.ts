@@ -134,11 +134,15 @@ export async function PATCH(req: NextRequest, { params }: RouteParams) {
 
   const updates: Record<string, unknown> = {};
 
-  // AM/Admin のみ: ステップ数・期限・am_memo
-  if (isAdmin || isAM) {
+  // 全ロール（本人含む）: ステップ数・期限
+  if (isAdmin || isAM || isSales || isSelf) {
     if ("completed_step_count" in body) updates.completed_step_count = body.completed_step_count;
     if ("deadlines_by_step_id" in body) updates.deadlines_by_step_id = body.deadlines_by_step_id;
-    if ("am_memo" in body)              updates.am_memo               = body.am_memo;
+  }
+
+  // AM/Admin のみ: am_memo
+  if (isAdmin || isAM) {
+    if ("am_memo" in body) updates.am_memo = body.am_memo;
   }
 
   // Sales/Admin のみ: sales_memo

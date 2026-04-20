@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { Card, CardContent } from "@/components/ui/card";
 import PageLayout from "@/components/layout/PageLayout";
-import RoadmapProgress from "@/components/roadmap/RoadmapProgress";
+import RoadmapAppointerRowDB from "@/components/roadmap/RoadmapAppointerRowDB";
 import SurveyNotice from "@/components/survey/SurveyNotice";
 import EvaluationResult from "@/components/evaluation/EvaluationResult";
 import { ROADMAP_STEPS } from "@/types/roadmap";
@@ -154,16 +154,16 @@ export default function AppointerPage() {
           </div>
         </div>
 
-        {/* ロードマップ詳細 */}
+        {/* ロードマップ詳細（インタラクティブ） */}
         {roadmap && (
-          <Card>
-            <CardContent className="pt-4">
-              <RoadmapProgress
-                roadmap={roadmap}
-                label="デビュー・ロードマップ"
-              />
-            </CardContent>
-          </Card>
+          <RoadmapAppointerRowDB
+            userId={myDbId}
+            label="デビュー・ロードマップ"
+            roadmap={roadmap}
+            readOnly={false}
+            showAmMemo={false}
+            onUpdated={(next) => setRoadmap(next)}
+          />
         )}
 
         {/* 人事評価結果（管理者が公開した場合のみ表示） */}

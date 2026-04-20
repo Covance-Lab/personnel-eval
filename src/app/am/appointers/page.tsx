@@ -153,38 +153,6 @@ function AppointerDetail({
       {/* ステータス */}
       {tab === "status" && (
         <div className="space-y-3">
-          {/* デビューまでの段階（ツールチップ付き） */}
-          <div>
-            <p className="text-xs font-semibold text-gray-700 mb-2">デビューまでの段階</p>
-            <div className="flex gap-1.5 flex-wrap">
-              {ROADMAP_STEPS.map((step, i) => {
-                const completed = roadmap ? roadmap.completedStepCount > i : false;
-                return (
-                  <div key={step.id} className="relative group">
-                    <div className={`px-3 py-1.5 rounded-lg text-xs font-medium border cursor-default select-none ${
-                      completed
-                        ? "bg-indigo-600 text-white border-indigo-600"
-                        : "bg-white text-gray-400 border-gray-200"
-                    }`}>
-                      STEP {i + 1}
-                    </div>
-                    {/* ツールチップ */}
-                    <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 hidden group-hover:block z-20 w-44 bg-gray-800 text-white text-xs rounded-lg px-2.5 py-2 text-center pointer-events-none shadow-lg">
-                      <p className="font-semibold mb-0.5">STEP {i + 1}</p>
-                      <p className="text-gray-300">{step.label}</p>
-                      <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-gray-800" />
-                    </div>
-                  </div>
-                );
-              })}
-              {roadmap && roadmap.completedStepCount >= 6 && (
-                <div className="px-3 py-1.5 rounded-lg text-xs font-medium bg-green-100 text-green-700 border border-green-300">
-                  デビュー済み
-                </div>
-              )}
-            </div>
-          </div>
-
           {/* ロードマップ詳細（AM編集） */}
           {roadmap ? (
             <RoadmapAppointerRowDB
@@ -429,13 +397,14 @@ export default function AppointerManagePage() {
 
   // ─── サマリー集計 ──────────────────────────────────────────────────
   const totalCount   = members.length;
-  const debutedCount = members.filter((u) => (roadmaps[u.id]?.completedStepCount ?? 0) >= 6).length;
+  const TOTAL_STEPS   = ROADMAP_STEPS.length; // 17
+  const debutedCount  = members.filter((u) => (roadmaps[u.id]?.completedStepCount ?? 0) >= TOTAL_STEPS).length;
   const preDebutCount = members.filter((u) => {
     const rm = roadmaps[u.id];
-    return rm && rm.completedStepCount < 6;
+    return rm && rm.completedStepCount < TOTAL_STEPS;
   }).length;
   // STEPごとの人数（completedStepCount === i → STEPi+1 に在籍）
-  const stepCounts = Array.from({ length: 6 }, (_, i) =>
+  const stepCounts = Array.from({ length: TOTAL_STEPS }, (_, i) =>
     members.filter((u) => (roadmaps[u.id]?.completedStepCount ?? -1) === i).length
   );
 

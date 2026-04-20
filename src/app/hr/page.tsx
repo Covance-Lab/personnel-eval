@@ -14,7 +14,7 @@ import {
   RadarChart, Radar, PolarGrid, PolarAngleAxis,
   ResponsiveContainer, Legend,
 } from "recharts";
-import { ROADMAP_STEPS } from "@/types/roadmap";
+import { ROADMAP_STEPS, ROADMAP_PHASES } from "@/types/roadmap";
 
 interface UserRecord {
   id: string;
@@ -128,7 +128,11 @@ const TEAM_COLORS: Record<string, string> = {
   Covance: "#f59e0b",
 };
 
-const STEP_LABELS = ["未着手", "STEP 1", "STEP 2", "STEP 3", "STEP 4", "STEP 5"];
+function getStepLabel(completedStepCount: number, total: number): string {
+  if (completedStepCount <= 0) return "未着手";
+  if (completedStepCount >= total) return "デビュー完了";
+  return `STEP${completedStepCount} 完了`;
+}
 
 // ────────────────────────────────────────────
 // レーダーチャート（共通）
@@ -240,7 +244,7 @@ function AppointerExpandRow({ user: u, onMemoSaved }: { user: UserRecord; onMemo
           </div>
           {!u.debuted && (
             <p className="text-xs text-gray-400 mt-0.5">
-              {STEP_LABELS[u.completedStepCount] ?? `STEP ${u.completedStepCount}`} 完了
+              {getStepLabel(u.completedStepCount, ROADMAP_STEPS.length)}
             </p>
           )}
         </div>
@@ -282,22 +286,33 @@ function AppointerExpandRow({ user: u, onMemoSaved }: { user: UserRecord; onMemo
           {tab === "status" && (
             <div className="space-y-3">
               <div>
-                <p className="text-xs font-semibold text-gray-700 mb-2">デビューまでの段階</p>
-                <div className="flex gap-1.5 flex-wrap">
-                  {ROADMAP_STEPS.map((step, i) => (
-                    <StepBadge
-                      key={step.id}
-                      step={i + 1}
-                      label={step.label}
-                      completed={u.debuted || u.completedStepCount > i}
-                    />
+                <p className="text-xs font-semibold text-gray-700 mb-2">デビューまでの進捗</p>
+                {/* プログレスバー */}
+                <div className="flex gap-1 mb-2">
+                  {ROADMAP_STEPS.map((_, i) => (
+                    <div key={i} className={`flex-1 h-2 rounded-full ${i < u.completedStepCount ? "bg-indigo-500" : "bg-gray-200"}`} />
                   ))}
-                  {u.debuted && (
-                    <div className="px-3 py-1.5 rounded-lg text-xs font-medium bg-green-100 text-green-700 border border-green-300">
-                      デビュー済み
-                    </div>
-                  )}
                 </div>
+                <p className="text-xs text-gray-500 mb-3">{u.completedStepCount} / {ROADMAP_STEPS.length} 完了</p>
+                {/* フェーズ別ステップ一覧 */}
+                {ROADMAP_PHASES.map((phase) => (
+                  <div key={phase.id} className="mb-2">
+                    <p className="text-xs font-medium text-gray-400 mb-0.5">{phase.label}</p>
+                    <div className="space-y-0.5">
+                      {phase.steps.map((step) => {
+                        const idx = ROADMAP_STEPS.findIndex((r) => r.id === step.id);
+                        const done = idx < u.completedStepCount;
+                        const active = idx === u.completedStepCount;
+                        return (
+                          <div key={step.id} className={`flex items-center gap-1.5 text-xs px-2 py-0.5 rounded ${done ? "text-gray-400" : active ? "text-indigo-700 font-semibold" : "text-gray-300"}`}>
+                            <span>{done ? "✓" : active ? "●" : "○"}</span>
+                            <span className={done ? "line-through" : ""}>{idx + 1}. {step.label}</span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))}
               </div>
               {u.amMemo && (
                 <div>
@@ -498,7 +513,7 @@ function UserRow({ user: u }: { user: UserRecord }) {
         </div>
         {u.role === "Appointer" && !u.debuted && (
           <p className="text-xs text-gray-400 mt-0.5">
-            {STEP_LABELS[u.completedStepCount] ?? `STEP ${u.completedStepCount}`} 完了
+            {getStepLabel(u.completedStepCount, ROADMAP_STEPS.length)}
           </p>
         )}
       </div>

@@ -46,23 +46,23 @@ const DEFAULT_APPINTER_PRESETS: Record<
 > = {
   "ap-tsujii-01": {
     registeredDaysAgo: 45,
-    completedStepCount: 1,
-    deadlines: { followers400500: 2 },
+    completedStepCount: 3,
+    deadlines: { step4: 2 },
   },
   "ap-tsujii-02": {
     registeredDaysAgo: 12,
     completedStepCount: 0,
-    deadlines: { instaThreadsAccount: 10 },
+    deadlines: { step1: 10 },
   },
   "ap-lumia-01": {
     registeredDaysAgo: 75,
-    completedStepCount: 2,
-    deadlines: { reelsPost: -3 },
+    completedStepCount: 7,
+    deadlines: { step8: -3 },
   },
   "ap-lumia-02": {
     registeredDaysAgo: 8,
-    completedStepCount: 4,
-    deadlines: { productUnderstanding: 1 },
+    completedStepCount: 12,
+    deadlines: { step13: 1 },
   },
 };
 
