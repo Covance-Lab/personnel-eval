@@ -1,20 +1,25 @@
 /**
  * メンバーマスタシートへの書き込みロジック（サーバーサイド専用）
  *
- * 列構成:
- *   A: LINE ID (またはシステムユーザーID)
+ * スプレッドシートの実際の列構成（1行目ヘッダー）:
+ *   A: 追加日時
  *   B: フルネーム
  *   C: あだ名
  *   D: 役職
  *   E: チーム名
- *   F: 教育係名
- *   G: 登録日時
+ *   F: 担当AM（教育係名）
+ *   G: （予備）
+ *   H: LINE ID
+ *
+ * LINE ID は H列（index=7）に保存し、重複検索もH列で行う。
  */
 
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 import { fetchSheetRange, appendSheetRow, updateSheetRow } from "@/lib/sheets/sheetsClient";
 
 const SHEET_NAME = "メンバーマスタ";
+// LINE IDが格納されている列（0-indexed）
+const LINE_ID_COL_INDEX = 7; // H列
 
 export async function writeMemberMaster(userId: string): Promise<{
   ok: boolean;
@@ -58,35 +63,37 @@ export async function writeMemberMaster(userId: string): Promise<{
   }
 
   const spreadsheetId = cfg.spreadsheet_id as string;
-  // LINE IDが取れない場合はシステムユーザーIDで代替
   const lineId = (user.line_id as string | null) ?? (user.id as string);
   const now = new Date().toLocaleString("ja-JP", { timeZone: "Asia/Tokyo" });
 
+  // スプレッドシートの列順に合わせた書き込み値
+  // A:追加日時, B:フルネーム, C:あだ名, D:役職, E:チーム名, F:担当AM, G:（予備）, H:LINE ID
   const rowValues: (string | number)[] = [
-    lineId,
-    (user.name as string) ?? "",
-    (user.nickname as string) ?? "",
-    (user.role as string) ?? "",
-    (user.team as string) ?? "",
-    mentorName,
-    now,
+    now,                                    // A: 追加日時
+    (user.name as string) ?? "",            // B: フルネーム
+    (user.nickname as string) ?? "",        // C: あだ名
+    (user.role as string) ?? "",            // D: 役職
+    (user.team as string) ?? "",            // E: チーム名
+    mentorName,                             // F: 担当AM
+    "",                                     // G: （予備）
+    lineId,                                 // H: LINE ID
   ];
 
   try {
-    // A列全体を取得して既存行を検索
+    // H列（LINE ID列）を取得して既存行を検索
     const { rows } = await fetchSheetRange({
       spreadsheetId,
       sheetName: SHEET_NAME,
-      range: "A:A",
+      range: "A:H",
     });
 
     const existingRowIndex = rows.findIndex(
-      (r) => String(r[0] ?? "").trim() === lineId
+      (r) => String(r[LINE_ID_COL_INDEX] ?? "").trim() === lineId
     );
 
     let isMock: boolean;
     if (existingRowIndex >= 0) {
-      // 既存行を更新（1-indexed）
+      // 既存行を更新（rowIndex は 1-indexed）
       const result = await updateSheetRow({
         spreadsheetId,
         sheetName: SHEET_NAME,

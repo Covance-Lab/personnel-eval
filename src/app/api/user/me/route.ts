@@ -83,11 +83,14 @@ export async function PATCH(req: NextRequest) {
   }
 
   // セットアップ完了時（初回 or 再設定）: メンバーマスタに書き込む
-  // レスポンスを遅らせないよう非同期で実行（エラーはログのみ）
+  // サーバーレス環境ではレスポンス後にプロセスが終了するため await で確実に完了させる
   if (body.setup_completed === true) {
-    writeMemberMaster(session.user.dbId).catch((e) =>
-      console.error("[user/me] writeMemberMaster failed:", e)
-    );
+    try {
+      await writeMemberMaster(session.user.dbId);
+    } catch (e) {
+      console.error("[user/me] writeMemberMaster failed:", e);
+      // 書き込み失敗はユーザー体験に影響させない
+    }
   }
 
   return NextResponse.json({ user: data });
