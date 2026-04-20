@@ -906,7 +906,7 @@ export default function HRPage() {
                   {[
                     { icon: <Users className="w-3.5 h-3.5 text-gray-400" />, label: "アポインター総数", value: summary.total, color: "text-gray-800" },
                     { icon: <UserCheck className="w-3.5 h-3.5 text-green-500" />, label: "デビュー済み", value: summary.debuted, color: "text-green-600" },
-                    { icon: <TrendingUp className="w-3.5 h-3.5 text-indigo-500" />, label: "デビュー前", value: summary.preDebut.reduce((s, p) => s + p.count, 0), color: "text-indigo-600" },
+                    { icon: <TrendingUp className="w-3.5 h-3.5 text-indigo-500" />, label: "デビュー前", value: (summary.phaseCount ?? []).reduce((s, p) => s + p.count, 0), color: "text-indigo-600" },
                     { icon: <UserX className="w-3.5 h-3.5 text-red-400" />, label: "当月離脱", value: summary.churned, color: "text-red-500" },
                   ].map(({ icon, label, value, color }) => (
                     <div key={label} className="flex items-center justify-between bg-gray-50 rounded-lg px-3 py-2 border">
@@ -918,25 +918,14 @@ export default function HRPage() {
                     </div>
                   ))}
                 </div>
-                {/* 右列：STEP別（ツールチップ付き） */}
+                {/* 右列：フェーズ別 */}
                 <div className="space-y-2">
-                  {summary.preDebut.map(({ step, count }) => {
-                    const stepLabel  = step === 0 ? "未着手" : `STEP${step}`;
-                    const stepDetail = step >= 1 ? (ROADMAP_STEPS[step - 1]?.label ?? "") : "";
-                    return (
-                      <div key={step} className="relative group flex items-center justify-between bg-gray-50 rounded-lg px-3 py-2 border cursor-default">
-                        <span className="text-xs text-gray-500">{stepLabel}</span>
-                        <span className="text-lg font-bold text-indigo-600">{count}<span className="text-xs font-normal text-gray-400 ml-0.5">人</span></span>
-                        {stepDetail && (
-                          <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 hidden group-hover:block z-20 w-44 bg-gray-800 text-white text-xs rounded-lg px-2.5 py-2 text-center pointer-events-none shadow-lg">
-                            <p className="font-semibold mb-0.5">{stepLabel}</p>
-                            <p className="text-gray-300">{stepDetail}</p>
-                            <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-gray-800" />
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
+                  {(summary.phaseCount ?? []).map(({ label, count }) => (
+                    <div key={label} className="flex items-center justify-between bg-gray-50 rounded-lg px-3 py-2 border">
+                      <span className="text-xs text-gray-500">{label}</span>
+                      <span className="text-lg font-bold text-indigo-600">{count}<span className="text-xs font-normal text-gray-400 ml-0.5">人</span></span>
+                    </div>
+                  ))}
                 </div>
               </div>
             </CardContent>
