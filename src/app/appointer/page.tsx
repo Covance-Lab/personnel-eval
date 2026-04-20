@@ -8,6 +8,7 @@ import PageLayout from "@/components/layout/PageLayout";
 import RoadmapAppointerRowDB from "@/components/roadmap/RoadmapAppointerRowDB";
 import SurveyNotice from "@/components/survey/SurveyNotice";
 import EvaluationResult from "@/components/evaluation/EvaluationResult";
+import { Calendar } from "lucide-react";
 import { ROADMAP_STEPS } from "@/types/roadmap";
 import type { AppointerRoadmap } from "@/types/roadmap";
 import type { PerformanceRecord } from "@/types/performance";
@@ -163,14 +164,22 @@ export default function AppointerPage() {
 
         {/* ロードマップ詳細（インタラクティブ） */}
         {roadmap && (
-          <RoadmapAppointerRowDB
-            userId={myDbId}
-            label="デビュー・ロードマップ"
-            roadmap={roadmap}
-            readOnly={false}
-            showAmMemo={false}
-            onUpdated={(next) => setRoadmap(next)}
-          />
+          <div className="space-y-2">
+            {roadmap.registeredAt && (
+              <div className="flex items-center gap-1.5 text-xs text-gray-500 px-1">
+                <Calendar className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+                <span>業務スタート日：{roadmap.registeredAt.slice(0, 10)}</span>
+              </div>
+            )}
+            <RoadmapAppointerRowDB
+              userId={myDbId}
+              label="デビュー・ロードマップ"
+              roadmap={roadmap}
+              readOnly={false}
+              showAmMemo={false}
+              onUpdated={(next) => setRoadmap(next)}
+            />
+          </div>
         )}
 
         {/* 人事評価結果（管理者が公開した場合のみ表示） */}

@@ -355,11 +355,12 @@ export default function SalesPage() {
     const aSetC  = ta?.aSetCount  ?? 0;
     const aExecC = ta?.aExecCount ?? 0;
     const conC   = ta?.contractCount ?? 0;
+    const dmC = ta?.dmCount ?? ts.dmCount;
     return {
       label: t.label,
-      "DM数":    ta?.dmCount ?? ts.dmCount,
+      "DM数":    dmC,
       "B設定":   bSetC,
-      "B設定率": pct(bSetC, ts.dmCount),
+      "B設定率": pct(bSetC, dmC),
       "B実施":   bExecC,
       "B実施率": pct(bExecC, bSetC),
       "A設定":   aSetC,

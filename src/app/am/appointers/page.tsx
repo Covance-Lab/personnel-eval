@@ -7,7 +7,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import PageLayout from "@/components/layout/PageLayout";
 import RoadmapAppointerRowDB from "@/components/roadmap/RoadmapAppointerRowDB";
 import { RadarChart, Radar, PolarGrid, PolarAngleAxis, ResponsiveContainer, Legend } from "recharts";
-import { ChevronDown, ChevronUp, Award, User } from "lucide-react";
+import { ChevronDown, ChevronUp, Award, User, Calendar } from "lucide-react";
 import type { PerformanceRecord } from "@/types/performance";
 import type { AppointerRoadmap } from "@/types/roadmap";
 import { ROADMAP_STEPS } from "@/types/roadmap";
@@ -28,6 +28,8 @@ interface DBUser {
   gender?: string;
   hobbies?: string;
   self_introduction?: string;
+  churned_at?: string | null;
+  paused_at?: string | null;
 }
 
 interface EvalData {
@@ -93,21 +95,92 @@ function ScorePill({ score }: { score: number | null }) {
   );
 }
 
+// ─── 離脱・休止ステータス変更 ─────────────────────────────────────
+function StatusChanger({ userId, churnedAt, pausedAt, onChanged }: {
+  userId: string;
+  churnedAt: string | null | undefined;
+  pausedAt: string | null | undefined;
+  onChanged: (field: "churned_at" | "paused_at", value: string | null) => void;
+}) {
+  const [showChurn, setShowChurn] = useState(false);
+  const [showPause, setShowPause] = useState(false);
+  const [churnDate, setChurnDate] = useState(churnedAt ? churnedAt.slice(0, 10) : "");
+  const [pauseDate, setPauseDate] = useState(pausedAt ? pausedAt.slice(0, 10) : "");
+  const [saving, setSaving] = useState(false);
+
+  async function saveField(field: "churned_at" | "paused_at", dateStr: string | null) {
+    setSaving(true);
+    await fetch(`/api/roadmap/${userId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ [field]: dateStr ? new Date(dateStr).toISOString() : null }),
+    });
+    onChanged(field, dateStr ? new Date(dateStr).toISOString() : null);
+    setSaving(false);
+    setShowChurn(false);
+    setShowPause(false);
+  }
+
+  return (
+    <div className="space-y-2">
+      <p className="text-xs font-semibold text-gray-700">ステータス変更</p>
+      <div className="flex gap-2 flex-wrap">
+        <button onClick={() => { setShowChurn((v) => !v); setShowPause(false); }}
+          className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors ${churnedAt ? "bg-red-50 text-red-700 border-red-200" : "bg-white text-gray-600 border-gray-200 hover:bg-red-50 hover:text-red-700 hover:border-red-200"}`}>
+          {churnedAt ? `離脱済み (${churnedAt.slice(0, 10)})` : "離脱"}
+        </button>
+        <button onClick={() => { setShowPause((v) => !v); setShowChurn(false); }}
+          className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors ${pausedAt ? "bg-amber-50 text-amber-700 border-amber-200" : "bg-white text-gray-600 border-gray-200 hover:bg-amber-50 hover:text-amber-700 hover:border-amber-200"}`}>
+          {pausedAt ? `休止中 (${pausedAt.slice(0, 10)})` : "休止"}
+        </button>
+        {(churnedAt || pausedAt) && (
+          <button onClick={async () => {
+            setSaving(true);
+            if (churnedAt) { await fetch(`/api/roadmap/${userId}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ churned_at: null }) }); onChanged("churned_at", null); }
+            if (pausedAt)  { await fetch(`/api/roadmap/${userId}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ paused_at: null }) }); onChanged("paused_at", null); }
+            setSaving(false);
+          }} disabled={saving} className="px-3 py-1.5 rounded-lg text-xs font-medium border bg-white text-gray-400 border-gray-200 hover:bg-gray-50">解除</button>
+        )}
+      </div>
+      {showChurn && (
+        <div className="flex items-center gap-2 mt-1">
+          <input type="date" value={churnDate} onChange={(e) => setChurnDate(e.target.value)} className="text-xs rounded-lg border border-gray-200 px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-red-400" />
+          <button onClick={() => saveField("churned_at", churnDate || null)} disabled={saving || !churnDate} className="px-3 py-1.5 text-xs rounded-lg bg-red-600 text-white disabled:opacity-40 hover:bg-red-700">{saving ? "保存中..." : "離脱日を保存"}</button>
+        </div>
+      )}
+      {showPause && (
+        <div className="flex items-center gap-2 mt-1">
+          <input type="date" value={pauseDate} onChange={(e) => setPauseDate(e.target.value)} className="text-xs rounded-lg border border-gray-200 px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-amber-400" />
+          <button onClick={() => saveField("paused_at", pauseDate || null)} disabled={saving || !pauseDate} className="px-3 py-1.5 text-xs rounded-lg bg-amber-600 text-white disabled:opacity-40 hover:bg-amber-700">{saving ? "保存中..." : "休止日を保存"}</button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── アポインター詳細パネル ────────────────────────────────────────
 function AppointerDetail({
   user,
-  record,
   roadmap,
+  churnedAt,
+  pausedAt,
   onRoadmapUpdated,
+  onStatusChanged,
 }: {
   user: DBUser;
-  record: PerformanceRecord | null;
   roadmap: AppointerRoadmap | null;
+  churnedAt: string | null | undefined;
+  pausedAt: string | null | undefined;
   onRoadmapUpdated: (r: AppointerRoadmap) => void;
+  onStatusChanged: (field: "churned_at" | "paused_at", value: string | null) => void;
 }) {
   const [evalData, setEvalData] = useState<EvalData | null>(null);
   const [evalLoading, setEvalLoading] = useState(true);
   const [tab, setTab] = useState<"status" | "eval" | "profile">("status");
+  const [hireDate, setHireDate] = useState(roadmap?.registeredAt ? roadmap.registeredAt.slice(0, 10) : "");
+  const [savingHireDate, setSavingHireDate] = useState(false);
+  const [amMemo, setAmMemo] = useState(roadmap?.amMemo ?? "");
+  const [savingMemo, setSavingMemo] = useState(false);
 
   useEffect(() => {
     setEvalLoading(true);
@@ -117,6 +190,31 @@ function AppointerDetail({
       .then((d) => { setEvalData(d?.result ?? null); setEvalLoading(false); })
       .catch(() => setEvalLoading(false));
   }, [user.id]);
+
+  async function saveHireDate() {
+    if (!hireDate) return;
+    setSavingHireDate(true);
+    await fetch(`/api/roadmap/${user.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ registered_at: new Date(hireDate + "T00:00:00").toISOString() }),
+    });
+    setSavingHireDate(false);
+  }
+
+  async function saveAmMemo() {
+    setSavingMemo(true);
+    const res = await fetch(`/api/roadmap/${user.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ am_memo: amMemo }),
+    });
+    if (res.ok) {
+      const { roadmap: updated } = await res.json();
+      if (updated) onRoadmapUpdated(dbToRoadmap(updated));
+    }
+    setSavingMemo(false);
+  }
 
   const radarData = evalData ? [
     { subject: "稼働量",   自己: evalData.workload_score,    他者: evalData.workload_score },
@@ -138,13 +236,8 @@ function AppointerDetail({
       {/* タブ */}
       <div className="flex gap-1 bg-gray-200 rounded-lg p-0.5">
         {TABS.map((t) => (
-          <button
-            key={t.key}
-            onClick={() => setTab(t.key)}
-            className={`flex-1 text-xs py-1.5 rounded-md transition-colors font-medium ${
-              tab === t.key ? "bg-white text-indigo-700 shadow-sm" : "text-gray-500"
-            }`}
-          >
+          <button key={t.key} onClick={() => setTab(t.key)}
+            className={`flex-1 text-xs py-1.5 rounded-md transition-colors font-medium ${tab === t.key ? "bg-white text-indigo-700 shadow-sm" : "text-gray-500"}`}>
             {t.label}
           </button>
         ))}
@@ -152,7 +245,19 @@ function AppointerDetail({
 
       {/* ステータス */}
       {tab === "status" && (
-        <div className="space-y-3">
+        <div className="space-y-4">
+          {/* 採用日 */}
+          <div className="flex items-center gap-2 flex-wrap">
+            <Calendar className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+            <span className="text-xs text-gray-500 shrink-0">アポインター採用日：</span>
+            <input type="date" value={hireDate} onChange={(e) => setHireDate(e.target.value)}
+              className="text-xs rounded-lg border border-gray-200 px-2 py-1 focus:outline-none focus:ring-1 focus:ring-indigo-400" />
+            <button onClick={saveHireDate} disabled={savingHireDate || !hireDate}
+              className="px-2.5 py-1 text-xs rounded-lg bg-indigo-600 text-white disabled:opacity-40 hover:bg-indigo-700">
+              {savingHireDate ? "保存中" : "保存"}
+            </button>
+          </div>
+
           {/* ロードマップ詳細（AM編集） */}
           {roadmap ? (
             <RoadmapAppointerRowDB
@@ -166,13 +271,32 @@ function AppointerDetail({
             <p className="text-xs text-gray-400 text-center py-2">ロードマップ未登録</p>
           )}
 
-          {/* 営業マンのメモ（表示のみ・AMが閲覧可） */}
-          {roadmap?.salesMemo && (
-            <div>
-              <p className="text-xs font-semibold text-gray-700 mb-1">営業マンのメモ</p>
-              <p className="text-xs text-gray-600 bg-white rounded-lg border p-3 whitespace-pre-wrap">{roadmap.salesMemo}</p>
-            </div>
-          )}
+          {/* 離脱・休止 */}
+          <StatusChanger
+            userId={user.id}
+            churnedAt={churnedAt}
+            pausedAt={pausedAt}
+            onChanged={onStatusChanged}
+          />
+
+          {/* AMメモ */}
+          <div className="space-y-1.5">
+            <p className="text-xs font-semibold text-gray-700">AMメモ</p>
+            <textarea
+              value={amMemo}
+              onChange={(e) => setAmMemo(e.target.value)}
+              rows={3}
+              placeholder="AMからのメモを入力..."
+              className="w-full text-xs rounded-lg border border-gray-200 px-2.5 py-2 focus:outline-none focus:ring-1 focus:ring-indigo-400 resize-none"
+            />
+            <button
+              onClick={saveAmMemo}
+              disabled={savingMemo}
+              className="px-3 py-1.5 text-xs rounded-lg bg-indigo-600 text-white disabled:opacity-40 hover:bg-indigo-700"
+            >
+              {savingMemo ? "保存中..." : "メモを保存"}
+            </button>
+          </div>
         </div>
       )}
 
@@ -183,50 +307,23 @@ function AppointerDetail({
             <p className="text-xs text-gray-400 text-center py-4">読み込み中...</p>
           ) : !evalData ? (
             <p className="text-xs text-gray-400 text-center py-4">評価結果はまだ公開されていません</p>
-          ) : (
+          ) : radarData.length > 0 ? (
             <>
-              {/* レーダーチャート */}
-              {radarData.length > 0 && (
-                <>
-                  <p className="text-xs text-gray-400">
-                    <span className="text-indigo-500 font-medium">■ 自己</span>
-                    　<span className="text-pink-500 font-medium">■ 他者</span>（AM・営業マンの平均）
-                  </p>
-                  <ResponsiveContainer width="100%" height={200}>
-                    <RadarChart data={radarData} margin={{ top: 5, right: 25, bottom: 5, left: 25 }}>
-                      <PolarGrid />
-                      <PolarAngleAxis dataKey="subject" tick={{ fontSize: 11 }} />
-                      <Radar name="自己" dataKey="自己" stroke="#6366f1" fill="#6366f1" fillOpacity={0.25} />
-                      <Radar name="他者" dataKey="他者" stroke="#ec4899" fill="#ec4899" fillOpacity={0.2} />
-                      <Legend wrapperStyle={{ fontSize: 11 }} />
-                    </RadarChart>
-                  </ResponsiveContainer>
-                  <div className="rounded-lg border overflow-hidden bg-white">
-                    <table className="w-full text-xs">
-                      <thead className="bg-gray-50">
-                        <tr>
-                          <th className="text-left px-3 py-1.5 font-medium text-gray-600">項目</th>
-                          <th className="text-center px-3 py-1.5 font-medium text-indigo-600">自己</th>
-                          <th className="text-center px-3 py-1.5 font-medium text-pink-600">他者</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y">
-                        {radarData.map(({ subject, 自己: s, 他者: o }) => (
-                          <tr key={subject}>
-                            <td className="px-3 py-1.5 font-medium text-gray-700">{subject}</td>
-                            <td className="px-3 py-1.5 text-center text-indigo-600 font-semibold">{s != null ? s : "—"}</td>
-                            <td className="px-3 py-1.5 text-center text-pink-600 font-semibold">
-                              {o != null ? (Number.isInteger(o) ? o : Number(o).toFixed(1)) : "—"}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </>
-              )}
+              <p className="text-xs text-gray-400">
+                <span className="text-indigo-500 font-medium">■ 自己</span>
+                　<span className="text-pink-500 font-medium">■ 他者</span>（AM・営業マンの平均）
+              </p>
+              <ResponsiveContainer width="100%" height={200}>
+                <RadarChart data={radarData} margin={{ top: 5, right: 25, bottom: 5, left: 25 }}>
+                  <PolarGrid />
+                  <PolarAngleAxis dataKey="subject" tick={{ fontSize: 11 }} />
+                  <Radar name="自己" dataKey="自己" stroke="#6366f1" fill="#6366f1" fillOpacity={0.25} />
+                  <Radar name="他者" dataKey="他者" stroke="#ec4899" fill="#ec4899" fillOpacity={0.2} />
+                  <Legend wrapperStyle={{ fontSize: 11 }} />
+                </RadarChart>
+              </ResponsiveContainer>
             </>
-          )}
+          ) : null}
         </div>
       )}
 
@@ -256,11 +353,13 @@ function AppointerRow({
   record,
   roadmap,
   onRoadmapUpdated,
+  onStatusChanged,
 }: {
   user: DBUser;
   record: PerformanceRecord | null;
   roadmap: AppointerRoadmap | null;
   onRoadmapUpdated: (r: AppointerRoadmap) => void;
+  onStatusChanged: (field: "churned_at" | "paused_at", value: string | null) => void;
 }) {
   const [open, setOpen] = useState(false);
   const alerts      = analyzePerformanceAlerts(record ? [record] : []);
@@ -318,9 +417,11 @@ function AppointerRow({
       {open && (
         <AppointerDetail
           user={user}
-          record={record}
           roadmap={roadmap}
+          churnedAt={user.churned_at}
+          pausedAt={user.paused_at}
           onRoadmapUpdated={onRoadmapUpdated}
+          onStatusChanged={onStatusChanged}
         />
       )}
     </div>
@@ -355,7 +456,7 @@ export default function AppointerManagePage() {
 
     try {
       const [membersRes, perfRes] = await Promise.all([
-        fetch("/api/user/list?role=Appointer&fields=id,nickname,name,line_name,role,team,line_picture_url,icon_image_url,age,gender,hobbies,self_introduction"),
+        fetch("/api/user/list?role=Appointer&fields=id,nickname,name,line_name,role,team,line_picture_url,icon_image_url,age,gender,hobbies,self_introduction,churned_at,paused_at"),
         fetch(`/api/performance?year=${thisYear}&month=${thisMonth}`),
       ]);
 
@@ -396,17 +497,17 @@ export default function AppointerManagePage() {
   const userName = nickname ?? name ?? "AM";
 
   // ─── サマリー集計 ──────────────────────────────────────────────────
-  const totalCount   = members.length;
   const TOTAL_STEPS   = ROADMAP_STEPS.length; // 17
+  const totalCount    = members.length;
   const debutedCount  = members.filter((u) => (roadmaps[u.id]?.completedStepCount ?? 0) >= TOTAL_STEPS).length;
-  const preDebutCount = members.filter((u) => {
-    const rm = roadmaps[u.id];
-    return rm && rm.completedStepCount < TOTAL_STEPS;
-  }).length;
-  // STEPごとの人数（completedStepCount === i → STEPi+1 に在籍）
-  const stepCounts = Array.from({ length: TOTAL_STEPS }, (_, i) =>
-    members.filter((u) => (roadmaps[u.id]?.completedStepCount ?? -1) === i).length
-  );
+  const churnedCount  = members.filter((u) => !!u.churned_at).length;
+  const preDebutMembers = members.filter((u) => (roadmaps[u.id]?.completedStepCount ?? 0) < TOTAL_STEPS);
+  const phaseCount = [
+    { phase: "phase1", label: "Phase 1: 基礎構築",      count: preDebutMembers.filter((u) => (roadmaps[u.id]?.completedStepCount ?? 0) < 4).length },
+    { phase: "phase2", label: "Phase 2: アカウント成長", count: preDebutMembers.filter((u) => { const s = roadmaps[u.id]?.completedStepCount ?? 0; return s >= 4 && s < 7; }).length },
+    { phase: "phase3", label: "Phase 3: コンテンツ運用", count: preDebutMembers.filter((u) => { const s = roadmaps[u.id]?.completedStepCount ?? 0; return s >= 7 && s < 12; }).length },
+    { phase: "phase4", label: "Phase 4: 実践・自走",     count: preDebutMembers.filter((u) => (roadmaps[u.id]?.completedStepCount ?? 0) >= 12).length },
+  ];
 
   return (
     <PageLayout title="アポインター管理" role={role ?? "AM"} userName={userName} userImage={image} userTeam={team}>
@@ -419,10 +520,10 @@ export default function AppointerManagePage() {
               {/* 左：人数サマリー */}
               <div className="space-y-2">
                 {[
-                  { label: "アポインター総数", value: totalCount,    color: "text-gray-800" },
-                  { label: "デビュー済み",      value: debutedCount,  color: "text-green-600" },
-                  { label: "デビュー前",        value: preDebutCount, color: "text-indigo-600" },
-                  { label: "当月離脱",          value: 0,             color: "text-red-500" },
+                  { label: "アポインター総数", value: totalCount,                         color: "text-gray-800" },
+                  { label: "デビュー済み",      value: debutedCount,                       color: "text-green-600" },
+                  { label: "デビュー前",        value: preDebutMembers.length,              color: "text-indigo-600" },
+                  { label: "離脱中",            value: churnedCount,                        color: "text-red-500" },
                 ].map(({ label, value, color }) => (
                   <div key={label} className="flex items-center justify-between bg-gray-50 rounded-lg px-3 py-2 border">
                     <span className="text-xs text-gray-500">{label}</span>
@@ -430,27 +531,12 @@ export default function AppointerManagePage() {
                   </div>
                 ))}
               </div>
-              {/* 右：未着手 + STEP1-6（ツールチップ付き） */}
+              {/* 右：フェーズ別人数 */}
               <div className="space-y-2">
-                {/* 未着手：ロードマップ未登録 */}
-                <div className="flex items-center justify-between bg-gray-50 rounded-lg px-3 py-2 border">
-                  <span className="text-xs text-gray-500">未着手</span>
-                  <span className="text-lg font-bold text-indigo-600">
-                    {members.filter((u) => !roadmaps[u.id]).length}
-                    <span className="text-xs font-normal text-gray-400 ml-0.5">人</span>
-                  </span>
-                </div>
-                {ROADMAP_STEPS.map((step, i) => (
-                  <div key={step.id} className="relative group flex items-center justify-between bg-gray-50 rounded-lg px-3 py-2 border cursor-default">
-                    <span className="text-xs text-gray-500">STEP{i + 1}</span>
-                    <span className="text-lg font-bold text-indigo-600">
-                      {stepCounts[i]}<span className="text-xs font-normal text-gray-400 ml-0.5">人</span>
-                    </span>
-                    <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 hidden group-hover:block z-20 w-44 bg-gray-800 text-white text-xs rounded-lg px-2.5 py-2 text-center pointer-events-none shadow-lg">
-                      <p className="font-semibold mb-0.5">STEP {i + 1}</p>
-                      <p className="text-gray-300">{step.label}</p>
-                      <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-gray-800" />
-                    </div>
+                {phaseCount.map(({ phase, label, count }) => (
+                  <div key={phase} className="flex items-center justify-between bg-gray-50 rounded-lg px-3 py-2 border">
+                    <span className="text-xs text-gray-500">{label}</span>
+                    <span className="text-lg font-bold text-indigo-600">{count}<span className="text-xs font-normal text-gray-400 ml-0.5">人</span></span>
                   </div>
                 ))}
               </div>
@@ -486,6 +572,9 @@ export default function AppointerManagePage() {
                 record={record}
                 roadmap={roadmap}
                 onRoadmapUpdated={(next) => setRoadmaps((prev) => ({ ...prev, [u.id]: next }))}
+                onStatusChanged={(field, value) =>
+                  setMembers((prev) => prev.map((m) => m.id === u.id ? { ...m, [field]: value } : m))
+                }
               />
             );
           })

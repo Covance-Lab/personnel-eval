@@ -140,6 +140,11 @@ export async function PATCH(req: NextRequest, { params }: RouteParams) {
     if ("deadlines_by_step_id" in body) updates.deadlines_by_step_id = body.deadlines_by_step_id;
   }
 
+  // AM/Admin のみ: registered_at（採用日）
+  if (isAdmin || isAM) {
+    if ("registered_at" in body) updates.registered_at = body.registered_at;
+  }
+
   // AM/Admin のみ: am_memo
   if (isAdmin || isAM) {
     if ("am_memo" in body) updates.am_memo = body.am_memo;

@@ -30,6 +30,7 @@ interface UserRecord {
   isChurned: boolean;
   churned_at?: string | null;
   paused_at?: string | null;
+  registered_at?: string | null;
   dmCount: number;
   bSetCount: number;
   bSetRate: number | null;
@@ -377,6 +378,19 @@ function AppointerExpandRow({
   const canSeeSalesMemo  = isAdmin || isSales;
   const canChangeStatus  = isAdmin || isAM || isSales;
 
+  const [hireDate, setHireDate] = useState(u.registered_at ? u.registered_at.slice(0, 10) : "");
+  const [savingHireDate, setSavingHireDate] = useState(false);
+  async function saveHireDate() {
+    if (!hireDate) return;
+    setSavingHireDate(true);
+    await fetch(`/api/roadmap/${u.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ registered_at: new Date(hireDate + "T00:00:00").toISOString() }),
+    });
+    setSavingHireDate(false);
+  }
+
   const TABS = [
     { key: "status" as const,  label: "ステータス" },
     { key: "eval"   as const,  label: "人事評価" },
@@ -447,12 +461,30 @@ function AppointerExpandRow({
             <div className="space-y-4">
 
               {/* 採用日 */}
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
                 <Calendar className="w-3.5 h-3.5 text-gray-400 shrink-0" />
-                <span className="text-xs text-gray-500">アポインター採用日：</span>
-                <span className="text-xs font-semibold text-gray-700">
-                  {u.created_at ? new Date(u.created_at).toLocaleDateString("ja-JP") : "—"}
-                </span>
+                <span className="text-xs text-gray-500 shrink-0">アポインター採用日：</span>
+                {(isAdmin || isAM) ? (
+                  <>
+                    <input
+                      type="date"
+                      value={hireDate}
+                      onChange={(e) => setHireDate(e.target.value)}
+                      className="text-xs rounded-lg border border-gray-200 px-2 py-1 focus:outline-none focus:ring-1 focus:ring-indigo-400"
+                    />
+                    <button
+                      onClick={saveHireDate}
+                      disabled={savingHireDate || !hireDate}
+                      className="px-2.5 py-1 text-xs rounded-lg bg-indigo-600 text-white disabled:opacity-40 hover:bg-indigo-700"
+                    >
+                      {savingHireDate ? "保存中" : "保存"}
+                    </button>
+                  </>
+                ) : (
+                  <span className="text-xs font-semibold text-gray-700">
+                    {u.registered_at ? new Date(u.registered_at).toLocaleDateString("ja-JP") : "—"}
+                  </span>
+                )}
               </div>
 
               {/* デビューまでの進捗 */}
@@ -539,7 +571,7 @@ function AppointerExpandRow({
               {[
                 { label: "チーム",   value: u.team ?? "—" },
                 { label: "担当AM",   value: u.amName ?? "—" },
-                { label: "採用日",   value: u.created_at ? new Date(u.created_at).toLocaleDateString("ja-JP") : "—" },
+                { label: "採用日",   value: u.registered_at ? new Date(u.registered_at).toLocaleDateString("ja-JP") : "—" },
               ].map(({ label, value }) => (
                 <div key={label} className="flex gap-2">
                   <span className="text-gray-400 w-20 shrink-0">{label}</span>
