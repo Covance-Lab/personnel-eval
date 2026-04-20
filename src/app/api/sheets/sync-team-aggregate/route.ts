@@ -6,12 +6,12 @@
  * Body: { year: number, month: number }
  *
  * 列マッピング（A列=index0）:
- *   A(0)  = チーム名
- *   F(5)  = B商談日時（記入あり = B設定）
+ *   A(0)  = チーム名（記載あり = B設定1件）
  *   L(11) = B実施（"◎"）
  *   N(13) = A設定（"◎"）
  *   S(18) = A実施（"◎"）
  *   U(20) = 契約（"成約(全額着金)" or "成約(一部着金)"）
+ *   F7    = 全体DM総計、F8 = 全体B設定総計（サマリーセル）
  *
  * データ行は17行目から開始
  */
@@ -27,9 +27,6 @@ function isCircle(v: string | undefined): boolean {
   return (v ?? "").trim() === "◎";
 }
 
-function hasValue(v: string | undefined): boolean {
-  return (v ?? "").trim().length > 0;
-}
 
 interface TeamCount {
   bSetCount:    number;
@@ -83,9 +80,9 @@ export async function POST(req: NextRequest) {
     ]);
     rows = dataResult.rows;
     isMock = dataResult.isMock;
-    // F7 = DM総計, F8 = B設定総計（ともに数値セル）
-    overallDmCount       = parseInt((summaryResult.rows[0]?.[0] ?? "").replace(/[,，]/g, "")) || 0;
-    overallBSetFromSheet = parseInt((summaryResult.rows[1]?.[0] ?? "").replace(/[,，]/g, "")) || 0;
+    // F7 = DM総計, F8 = B設定総計（数値セルの場合も考慮してString変換）
+    overallDmCount       = parseInt(String(summaryResult.rows[0]?.[0] ?? "").replace(/[,，\s]/g, "")) || 0;
+    overallBSetFromSheet = parseInt(String(summaryResult.rows[1]?.[0] ?? "").replace(/[,，\s]/g, "")) || 0;
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
     return NextResponse.json({ error: message }, { status: 500 });
@@ -102,17 +99,14 @@ export async function POST(req: NextRequest) {
     if (!teamMap.has(team)) teamMap.set(team, emptyCount());
     const tc = teamMap.get(team)!;
 
-    const bSet      = hasValue(row[5]);   // F列: B商談
-    const bExec     = isCircle(row[11]);  // L列: B実施
-    const aSet      = isCircle(row[13]);  // N列: A設定
-    const aExec     = isCircle(row[18]);  // S列: A実施
-    const contract  = CONTRACT_VALUES.includes((row[20] ?? "").trim()); // U列: 契約
+    // B設定数 = A列にチーム名が記載されている行数（1行 = 1件のB設定）
+    tc.bSetCount++;
+    overall.bSetCount++;
 
-    if (bSet)     { tc.bSetCount++;    overall.bSetCount++;    }
-    if (bExec)    { tc.bExecCount++;   overall.bExecCount++;   }
-    if (aSet)     { tc.aSetCount++;    overall.aSetCount++;    }
-    if (aExec)    { tc.aExecCount++;   overall.aExecCount++;   }
-    if (contract) { tc.contractCount++; overall.contractCount++; }
+    if (isCircle(row[11]))  { tc.bExecCount++;    overall.bExecCount++;    } // L列: B実施
+    if (isCircle(row[13]))  { tc.aSetCount++;     overall.aSetCount++;     } // N列: A設定
+    if (isCircle(row[18]))  { tc.aExecCount++;    overall.aExecCount++;    } // S列: A実施
+    if (CONTRACT_VALUES.includes((row[20] ?? "").trim())) { tc.contractCount++; overall.contractCount++; } // U列: 契約
   }
 
   const syncedAt = new Date().toISOString();
