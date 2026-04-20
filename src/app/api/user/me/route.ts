@@ -6,6 +6,7 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
+import { writeMemberMaster } from "@/lib/sheets/writeMemberMaster";
 
 export async function GET() {
   const session = await auth();
@@ -81,14 +82,12 @@ export async function PATCH(req: NextRequest) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  // 初回セットアップ完了時: メンバーマスタに非同期書き込み（失敗してもレスポンスには影響しない）
-  const isSettingupComplete = body.setup_completed === true && !currentUser?.setup_completed;
-  if (isSettingupComplete) {
-    const baseUrl = process.env.NEXTAUTH_URL ?? "http://localhost:3000";
-    fetch(`${baseUrl}/api/sheets/write-member-master`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Cookie: req.headers.get("cookie") ?? "" },
-    }).catch((e) => console.error("[user/me] write-member-master failed:", e));
+  // セットアップ完了時（初回 or 再設定）: メンバーマスタに書き込む
+  // レスポンスを遅らせないよう非同期で実行（エラーはログのみ）
+  if (body.setup_completed === true) {
+    writeMemberMaster(session.user.dbId).catch((e) =>
+      console.error("[user/me] writeMemberMaster failed:", e)
+    );
   }
 
   return NextResponse.json({ user: data });
