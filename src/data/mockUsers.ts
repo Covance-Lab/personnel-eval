@@ -58,8 +58,8 @@ export const mockUsers: UserAccount[] = [
 ];
 
 export const roleLabelMap: Record<Role, string> = {
-  Admin: "Admin",
-  AM: "AM",
+  Admin: "管理者",
+  AM: "アポインターマネージャー",
   Sales: "営業マン",
   Bridge: "ブリッジ",
   Closer: "クローザー",

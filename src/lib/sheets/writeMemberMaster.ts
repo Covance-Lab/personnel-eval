@@ -32,7 +32,7 @@ export async function writeMemberMaster(userId: string): Promise<{
   // ユーザー情報取得
   const { data: user, error: userErr } = await supabaseAdmin
     .from("users")
-    .select("id, name, nickname, role, team, education_mentor_user_id, line_id, line_name")
+    .select("id, name, nickname, role, team, education_mentor_user_id, line_id, line_name, invoice_registration")
     .eq("id", userId)
     .single();
 
@@ -75,7 +75,7 @@ export async function writeMemberMaster(userId: string): Promise<{
     (user.role as string) ?? "",            // D: 役職
     (user.team as string) ?? "",            // E: チーム名
     mentorName,                             // F: 担当AM
-    "",                                     // G: （予備）
+    (user.invoice_registration as string) ?? "",  // G: インボイス登録の有無
     lineId,                                 // H: LINE ID
   ];
 

@@ -29,6 +29,7 @@ export default function ProfileSetupPage() {
   const [iconImageUrl, setIconImageUrl] = useState("");
   const [featuredImage1Url, setFeaturedImage1Url] = useState("");
   const [featuredImage2Url, setFeaturedImage2Url] = useState("");
+  const [invoiceRegistration, setInvoiceRegistration] = useState<"登録済み" | "未登録">("未登録");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -37,9 +38,17 @@ export default function ProfileSetupPage() {
       router.replace("/login");
       return;
     }
-    // setupCompleted が false のまま来た場合は /setup へ戻す
-    // ただし /setup → /profile/setup の遷移直後はセッション更新が遅れる場合があるため
-    // 少し待ってから確認する（update() が完了するまでの猶予）
+    if (status === "authenticated") {
+      // 既存のinvoice_registration値を取得して初期値にセット
+      fetch("/api/user/me")
+        .then((r) => r.json())
+        .then(({ user }) => {
+          if (user?.invoice_registration) {
+            setInvoiceRegistration(user.invoice_registration as "登録済み" | "未登録");
+          }
+        })
+        .catch(() => {});
+    }
   }, [status, session, router]);
 
   async function handleSubmit() {
@@ -57,6 +66,7 @@ export default function ProfileSetupPage() {
           icon_image_url: iconImageUrl || null,
           featured_image_1_url: featuredImage1Url || null,
           featured_image_2_url: featuredImage2Url || null,
+          invoice_registration: invoiceRegistration,
         }),
       });
       if (!res.ok) {
@@ -190,6 +200,22 @@ export default function ProfileSetupPage() {
                 <img src={featuredImage2Url} alt="featured2 preview" className="mt-2 w-full h-32 rounded object-cover border" />
               )}
             </div>
+          </div>
+
+          <div>
+            <p className="text-sm font-medium text-gray-700 mb-1">インボイス登録の有無</p>
+            <Select
+              value={invoiceRegistration}
+              onValueChange={(v) => setInvoiceRegistration(v as "登録済み" | "未登録")}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="選択" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="登録済み">登録済み</SelectItem>
+                <SelectItem value="未登録">未登録</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
 
           {error && <p className="text-sm text-red-600 bg-red-50 rounded px-3 py-2">{error}</p>}

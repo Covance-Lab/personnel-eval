@@ -530,7 +530,7 @@ function UserRow({ user: u }: { user: UserRecord }) {
 }
 
 function StatusBadge({ user: u }: { user: UserRecord }) {
-  if (u.role === "AM") return <Badge variant="outline" className="text-xs">AM</Badge>;
+  if (u.role === "AM") return <Badge variant="outline" className="text-xs">アポインターマネージャー</Badge>;
   if (u.isChurned) return <Badge className="bg-red-100 text-red-700 text-xs border-0">離脱</Badge>;
   if (u.debuted) return <Badge className="bg-green-100 text-green-700 text-xs border-0">デビュー済み</Badge>;
   return <Badge className="bg-indigo-100 text-indigo-700 text-xs border-0">デビュー前</Badge>;

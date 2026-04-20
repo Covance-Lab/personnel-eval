@@ -55,6 +55,7 @@ export async function PATCH(req: NextRequest) {
     "featured_image_1_url",
     "featured_image_2_url",
     "expected_income",
+    "invoice_registration",
   ];
 
   const updates: Record<string, unknown> = {};

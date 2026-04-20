@@ -15,6 +15,15 @@ function getEducationMentorOptions(team: TeamGroup) {
   return EDUCATION_MENTORS_BY_TEAM[team] ?? [];
 }
 
+const ROLE_LABELS: Record<Role, string> = {
+  Appointer: "アポインター",
+  AM: "アポインターマネージャー",
+  Sales: "営業マン",
+  Admin: "管理者",
+  Bridge: "ブリッジ",
+  Closer: "クローザー",
+};
+
 export default function SetupPage() {
   const router = useRouter();
   const { data: session, status, update } = useSession();
@@ -24,6 +33,7 @@ export default function SetupPage() {
   const [role, setRole] = useState<Role>("Appointer");
   const [team, setTeam] = useState<TeamGroup>(TEAMS[0]);
   const [educationMentorUserId, setEducationMentorUserId] = useState("");
+  const [invoiceRegistration, setInvoiceRegistration] = useState<"登録済み" | "未登録">("未登録");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const redirectingToProfile = useRef(false);
@@ -97,6 +107,7 @@ export default function SetupPage() {
           role,
           team: needsTeam ? team : null,
           education_mentor_user_id: needsMentor ? educationMentorUserId : null,
+          invoice_registration: invoiceRegistration,
           setup_completed: true,
         }),
       });
@@ -153,7 +164,7 @@ export default function SetupPage() {
               onValueChange={(v) => setRole((v ?? "Appointer") as Role)}
             >
               <SelectTrigger>
-                <SelectValue placeholder="選択" />
+                <SelectValue>{ROLE_LABELS[role] ?? role}</SelectValue>
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="Appointer">アポインター</SelectItem>
@@ -190,7 +201,9 @@ export default function SetupPage() {
                 onValueChange={(v) => setEducationMentorUserId(v ?? "")}
               >
                 <SelectTrigger>
-                  <SelectValue placeholder="選択" />
+                  <SelectValue>
+                    {educationMentors.find((m) => m.userId === educationMentorUserId)?.label ?? "選択してください"}
+                  </SelectValue>
                 </SelectTrigger>
                 <SelectContent>
                   {educationMentors.map((m) => (
@@ -202,6 +215,22 @@ export default function SetupPage() {
               </Select>
             </div>
           )}
+
+          <div>
+            <p className="text-sm font-medium text-gray-700 mb-1">インボイス登録の有無</p>
+            <Select
+              value={invoiceRegistration}
+              onValueChange={(v) => setInvoiceRegistration(v as "登録済み" | "未登録")}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="選択" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="登録済み">登録済み</SelectItem>
+                <SelectItem value="未登録">未登録</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
 
           {error && (
             <p className="text-sm text-red-600 bg-red-50 rounded px-3 py-2">{error}</p>
