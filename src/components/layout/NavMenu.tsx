@@ -127,7 +127,7 @@ export default function NavMenu({ role, userName, userImage, userTeam }: NavMenu
 
       {/* オーバーレイ */}
       {open && (
-        <div className="fixed inset-0 bg-black/30 backdrop-blur-[1px] z-40 transition-opacity" onClick={() => setOpen(false)} />
+        <div className="fixed inset-0 z-40" style={{ background: "rgba(0,0,0,0.35)" }} onClick={() => setOpen(false)} />
       )}
 
       {/* ドロワー */}
@@ -142,7 +142,7 @@ export default function NavMenu({ role, userName, userImage, userTeam }: NavMenu
         <div className="h-1 w-full shrink-0" style={{ background: "linear-gradient(90deg, #cfa340, #e8c060, #cfa340)" }} />
 
         {/* ── ドロワーヘッダー ── */}
-        <div className="flex items-center justify-between px-4 py-4 border-b border-amber-100 bg-white/50">
+        <div className="flex items-center justify-between px-4 py-4 border-b border-amber-100" style={{ background: "#fdf4e0" }}>
           <div className="flex items-center gap-3">
             {userImage ? (
               // eslint-disable-next-line @next/next/no-img-element
@@ -243,7 +243,7 @@ export default function NavMenu({ role, userName, userImage, userTeam }: NavMenu
         )}
 
         {/* ログアウト */}
-        <div className="border-t border-amber-100 p-3 bg-white/30">
+        <div className="border-t border-amber-100 p-3" style={{ background: "#fdf4e0" }}>
           <button
             onClick={() => { setOpen(false); clearViewAs(); signOut({ callbackUrl: "/login" }); }}
             className="w-full flex items-center gap-3 px-5 py-3 rounded-xl text-red-400 hover:bg-red-50 transition-colors"

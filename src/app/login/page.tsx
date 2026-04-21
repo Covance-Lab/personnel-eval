@@ -119,9 +119,9 @@ function LoginContent() {
 
         {/* ── パンダヒーロー ── */}
         <div className="relative flex items-end justify-center pt-8 pb-0"
-          style={{ background: "linear-gradient(180deg, #fff9ec 0%, #fef5de 100%)" }}>
-          {/* 背景の装飾リング */}
-          <div className="absolute top-6 left-1/2 -translate-x-1/2 w-40 h-40 rounded-full bg-amber-100/60 blur-2xl" />
+          style={{ background: "#cfa340" }}>
+          {/* 背景の装飾グロー */}
+          <div className="absolute top-6 left-1/2 -translate-x-1/2 w-40 h-40 rounded-full bg-white/10 blur-2xl" />
           {/* パンダ */}
           <div className="relative z-10 w-48 h-48 drop-shadow-2xl">
             <Image
@@ -139,10 +139,10 @@ function LoginContent() {
 
           {/* タイトル */}
           <div className="text-center mb-7">
-            <h1 className="text-2xl font-bold text-gray-900 tracking-tight">
-              アポインター管理
+            <p className="text-[11px] font-semibold text-amber-700/50 tracking-widest mb-1">株式会社Covance</p>
+            <h1 className="text-xl font-bold text-gray-900 tracking-tight leading-snug">
+              集客管理ツール
             </h1>
-            <p className="text-xs text-amber-700/60 mt-1.5">評価・離脱防止システム</p>
             <div className="flex items-center justify-center gap-1.5 mt-3">
               <div className="w-5 h-0.5 rounded-full bg-amber-200" />
               <div className="w-10 h-[3px] rounded-full bg-[#cfa340]" />

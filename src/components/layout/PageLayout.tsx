@@ -18,7 +18,7 @@ export default function PageLayout({ title, role, userName, userImage, userTeam,
       {/* ゴールドアクセントバー */}
       <div className="h-1 w-full" style={{ background: "linear-gradient(90deg, #cfa340 0%, #e8c060 50%, #cfa340 100%)" }} />
 
-      <header className="bg-white/90 backdrop-blur-sm border-b border-amber-100 sticky top-0 z-30 shadow-sm shadow-amber-50">
+      <header className="border-b border-amber-100 sticky top-0 z-30 shadow-sm" style={{ background: "#fffdf7" }}>
         <div className="max-w-5xl mx-auto px-4 py-3 flex items-center justify-between">
           <div className="flex items-center gap-2.5">
             {/* ゴールドドット */}
