@@ -111,7 +111,7 @@ export async function PATCH(req: NextRequest) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  const { userId, role, team, educationMentorUserId } = await req.json();
+  const { userId, role, team, educationMentorUserId, includeOtherAmInSurvey } = await req.json();
   if (!userId) {
     return NextResponse.json({ error: "userId is required" }, { status: 400 });
   }
@@ -123,12 +123,15 @@ export async function PATCH(req: NextRequest) {
   if (educationMentorUserId !== undefined) {
     updates.education_mentor_user_id = educationMentorUserId || null;
   }
+  if (includeOtherAmInSurvey !== undefined) {
+    updates.include_other_am_in_survey = includeOtherAmInSurvey;
+  }
 
   const { data, error } = await supabaseAdmin
     .from("users")
     .update(updates)
     .eq("id", userId)
-    .select("id, role, team, nickname, education_mentor_user_id")
+    .select("id, role, team, nickname, education_mentor_user_id, include_other_am_in_survey")
     .single();
 
   if (error) {

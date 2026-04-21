@@ -18,6 +18,7 @@ function getEducationMentorOptions(team: TeamGroup) {
 const ROLE_LABELS: Record<Role, string> = {
   Appointer: "アポインター",
   AM: "アポインターマネージャー",
+  AM_Sales: "AM兼営業マン",
   Sales: "営業マン",
   Admin: "管理者",
   Bridge: "ブリッジ",

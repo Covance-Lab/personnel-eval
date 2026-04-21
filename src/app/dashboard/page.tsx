@@ -8,6 +8,7 @@ const ROLE_TOP: Record<string, string> = {
   Admin:     "/overview",
   Sales:     "/sales",
   AM:        "/am",
+  AM_Sales:  "/am-sales",
   Appointer: "/appointer",
   Bridge:    "/am",
   Closer:    "/am",

@@ -42,6 +42,14 @@ function getNavItems(role: Role, currentPath: string, router: ReturnType<typeof 
         { label: "アポインター管理", href: "/am/appointers",  icon: <Users className="w-5 h-5" />,       onClick: go("/am/appointers"),   active: isActive("/am/appointers") },
         { label: "プロフィール設定", href: "/profile/setup",  icon: <User className="w-5 h-5" />,       onClick: go("/profile/setup"),   active: isActive("/profile/setup") },
       ];
+    case "AM_Sales":
+      return [
+        { label: "数値管理",              href: "/am-sales",                          icon: <BarChart2 className="w-5 h-5" />,   onClick: go("/am-sales"),                                          active: currentPath === "/am-sales" },
+        { label: "自分管轄のアポインター", href: "/am-sales/appointers?view=own",     icon: <Users className="w-5 h-5" />,       onClick: go("/am-sales/appointers?view=own"),    active: isActive("/am-sales/appointers") && !currentPath.includes("view=others") },
+        { label: "他AM管轄のアポインター", href: "/am-sales/appointers?view=others",  icon: <TrendingUp className="w-5 h-5" />,  onClick: go("/am-sales/appointers?view=others"), active: currentPath.includes("view=others") },
+        { label: "人事評価",              href: "/hr",                                icon: <ChevronRight className="w-5 h-5" />, onClick: go("/hr"),                              active: isActive("/hr") },
+        { label: "プロフィール設定",       href: "/profile/setup",                    icon: <User className="w-5 h-5" />,        onClick: go("/profile/setup"),                   active: isActive("/profile/setup") },
+      ];
     case "Appointer":
       return [
         { label: "現状の数字",        href: "/appointer",          icon: <BarChart2 className="w-5 h-5" />,   onClick: go("/appointer"),          active: isActive("/appointer") },

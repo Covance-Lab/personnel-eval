@@ -4,7 +4,7 @@ import NavMenu from "./NavMenu";
 import type { Role } from "@/types/user";
 
 interface PageLayoutProps {
-  title: string;
+  title?: string;
   role: Role;
   userName: string;
   userImage?: string | null;

@@ -13,7 +13,7 @@ export async function GET() {
   if (!session?.user?.dbId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
-  if (!["Admin", "AM", "Sales"].includes(session.user.role)) {
+  if (!["Admin", "AM", "AM_Sales", "Sales"].includes(session.user.role)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
@@ -29,13 +29,13 @@ export async function GET() {
   const prevYear  = prevDate.getFullYear();
   const prevMonth = prevDate.getMonth() + 1;
 
-  // Sales: 自チームのAM＋そのアポインターのみ
+  // Sales / AM_Sales: 自チームのAM＋そのアポインターのみ
   let targetIds: string[] | null = null;
-  if (myRole === "Sales" && myTeam) {
+  if ((myRole === "Sales" || myRole === "AM_Sales") && myTeam) {
     const { data: teamAMs } = await supabaseAdmin
       .from("users")
       .select("id")
-      .eq("role", "AM")
+      .in("role", ["AM", "AM_Sales"])
       .eq("team", myTeam)
       .eq("setup_completed", true);
 

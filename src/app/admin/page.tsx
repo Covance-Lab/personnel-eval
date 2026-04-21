@@ -558,7 +558,7 @@ function MemberMasterSheetForm() {
 
 // ─── ユーザー管理テーブル ─────────────────────────────────────────
 
-const ROLES: Role[] = ["Admin", "AM", "Bridge", "Closer", "Appointer", "Sales"];
+const ROLES: Role[] = ["Admin", "AM", "AM_Sales", "Bridge", "Closer", "Appointer", "Sales"];
 
 interface ManagedUser {
   id: string;
@@ -568,20 +568,21 @@ interface ManagedUser {
   team?: string;
   line_name?: string;
   education_mentor_user_id?: string;
+  include_other_am_in_survey?: boolean;
 }
 
 function UserManagement() {
   const [users, setUsers] = useState<ManagedUser[]>([]);
 
   const load = useCallback(async () => {
-    const r = await fetch("/api/user/list?fields=id,nickname,name,role,team,line_name,education_mentor_user_id");
+    const r = await fetch("/api/user/list?fields=id,nickname,name,role,team,line_name,education_mentor_user_id,include_other_am_in_survey");
     const d = await r.json();
     setUsers(d.users ?? []);
   }, []);
 
   useEffect(() => { load(); }, [load]);
 
-  async function updateUser(userId: string, patch: Partial<{ role: Role; team: string; educationMentorUserId: string | null }>) {
+  async function updateUser(userId: string, patch: Partial<{ role: Role; team: string; educationMentorUserId: string | null; includeOtherAmInSurvey: boolean }>) {
     await fetch("/api/user/list", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
@@ -590,7 +591,7 @@ function UserManagement() {
     load();
   }
 
-  const amList = users.filter((u) => u.role === "AM");
+  const amList = users.filter((u) => u.role === "AM" || u.role === "AM_Sales");
 
   return (
     <Card>
@@ -655,6 +656,25 @@ function UserManagement() {
                       )}
                     </div>
                   )}
+                  {/* AM_Sales: 他AMのアポインターを評価対象に含めるか */}
+                  {u.role === "AM_Sales" && (
+                    <div className="flex items-center gap-2 pt-0.5">
+                      <span className="text-xs text-gray-500 shrink-0">他AMのアポインターを評価に含める:</span>
+                      <label className="flex items-center gap-1.5 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={u.include_other_am_in_survey ?? true}
+                          onChange={(e) =>
+                            updateUser(u.id, { includeOtherAmInSurvey: e.target.checked })
+                          }
+                          className="w-4 h-4 accent-amber-500"
+                        />
+                        <span className="text-xs text-gray-700">
+                          {(u.include_other_am_in_survey ?? true) ? "含める" : "含めない"}
+                        </span>
+                      </label>
+                    </div>
+                  )}
                 </div>
               );
             })}
@@ -701,7 +721,7 @@ function TestUserManager() {
 
   useEffect(() => { load(); }, [load]);
 
-  const amList = users.filter((u) => u.role === "AM");
+  const amList = users.filter((u) => u.role === "AM" || u.role === "AM_Sales");
 
   async function handleAdd() {
     if (!newName.trim()) return;

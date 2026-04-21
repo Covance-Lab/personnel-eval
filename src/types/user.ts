@@ -1,6 +1,7 @@
 export type Role =
   | "Admin"
   | "AM"
+  | "AM_Sales"
   | "Sales"
   | "Bridge"
   | "Closer"
