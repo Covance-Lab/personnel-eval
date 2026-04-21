@@ -13,6 +13,7 @@ import type { AppointerRoadmap } from "@/types/roadmap";
 import { ROADMAP_STEPS } from "@/types/roadmap";
 import type { Role } from "@/types/user";
 import { analyzePerformanceAlerts } from "@/types/performance";
+import AccountsView from "@/components/accounts/AccountsView";
 
 // ─── 型定義 ────────────────────────────────────────────────────────
 interface DBUser {
@@ -176,7 +177,7 @@ function AppointerDetail({
 }) {
   const [evalData, setEvalData] = useState<EvalData | null>(null);
   const [evalLoading, setEvalLoading] = useState(true);
-  const [tab, setTab] = useState<"status" | "eval" | "profile">("status");
+  const [tab, setTab] = useState<"status" | "accounts" | "eval" | "profile">("status");
   const [hireDate, setHireDate] = useState(roadmap?.registeredAt ? roadmap.registeredAt.slice(0, 10) : "");
   const [savingHireDate, setSavingHireDate] = useState(false);
   const [amMemo, setAmMemo] = useState(roadmap?.amMemo ?? "");
@@ -226,9 +227,10 @@ function AppointerDetail({
   ] : [];
 
   const TABS = [
-    { key: "status",  label: "ステータス" },
-    { key: "eval",    label: "人事評価" },
-    { key: "profile", label: "プロフィール" },
+    { key: "status",   label: "ステータス" },
+    { key: "accounts", label: "アカウント" },
+    { key: "eval",     label: "人事評価" },
+    { key: "profile",  label: "プロフィール" },
   ] as const;
 
   return (
@@ -299,6 +301,9 @@ function AppointerDetail({
           </div>
         </div>
       )}
+
+      {/* アカウント */}
+      {tab === "accounts" && <AccountsView userId={user.id} />}
 
       {/* 人事評価 */}
       {tab === "eval" && (

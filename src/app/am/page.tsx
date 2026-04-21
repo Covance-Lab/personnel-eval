@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import PageLayout from "@/components/layout/PageLayout";
 import SurveyNotice from "@/components/survey/SurveyNotice";
+import AccountsEditor from "@/components/accounts/AccountsEditor";
 import {
   PieChart, Pie, Cell, ResponsiveContainer, Tooltip,
   LineChart, Line, XAxis, YAxis, CartesianGrid, Legend,
@@ -323,12 +324,6 @@ export default function AMPage() {
           />
         </div>
 
-        {/* 補足 */}
-        <div className="bg-gray-50 rounded-xl border px-4 py-3 text-xs text-gray-500 space-y-0.5">
-          <p className="font-semibold text-gray-600">今月の目標値</p>
-          <p>DM数: {GOALS.dmCount.toLocaleString()}通　B設定数: {GOALS.bSetCount}件　B設定率: {GOALS.bSetRate}%</p>
-        </div>
-
         {/* 過去月 DM数サマリーテーブル */}
         {trendData.length > 0 && (
           <div className="bg-white rounded-2xl border p-4 space-y-3">
@@ -358,6 +353,9 @@ export default function AMPage() {
             </div>
           </div>
         )}
+
+        {/* アカウント設定 */}
+        <AccountsEditor userId={myDbId} />
 
         {/* 月次推移グラフ — アポインターチーム */}
         {trendData.length > 0 && (

@@ -123,7 +123,7 @@ function LoginContent() {
           {/* 背景の装飾グロー */}
           <div className="absolute top-6 left-1/2 -translate-x-1/2 w-40 h-40 rounded-full bg-white/10 blur-2xl" />
           {/* パンダ */}
-          <div className="relative z-10 w-48 h-48 drop-shadow-2xl">
+          <div className="relative z-10 w-36 h-36 drop-shadow-2xl">
             <Image
               src="/panda.png"
               alt="パンダ"

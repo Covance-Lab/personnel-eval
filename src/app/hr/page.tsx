@@ -9,6 +9,7 @@ import {
   Users, UserCheck, UserX, TrendingUp,
   ChevronDown, ChevronUp, Calendar,
 } from "lucide-react";
+import AccountsView from "@/components/accounts/AccountsView";
 import PageLayout from "@/components/layout/PageLayout";
 import {
   RadarChart, Radar, PolarGrid, PolarAngleAxis,
@@ -364,7 +365,7 @@ function AppointerExpandRow({
   onStatusChanged: (id: string, field: "churned_at" | "paused_at", value: string | null) => void;
 }) {
   const [open, setOpen] = useState(false);
-  const [tab, setTab] = useState<"status" | "eval" | "profile">("status");
+  const [tab, setTab] = useState<"status" | "accounts" | "eval" | "profile">("status");
 
   const avatar = u.icon_image_url ?? u.line_picture_url;
   const displayName = u.nickname ?? u.name ?? u.id;
@@ -392,9 +393,10 @@ function AppointerExpandRow({
   }
 
   const TABS = [
-    { key: "status" as const,  label: "ステータス" },
-    { key: "eval"   as const,  label: "人事評価" },
-    { key: "profile" as const, label: "プロフィール" },
+    { key: "status"   as const, label: "ステータス" },
+    { key: "accounts" as const, label: "アカウント" },
+    { key: "eval"     as const, label: "人事評価" },
+    { key: "profile"  as const, label: "プロフィール" },
   ];
 
   return (
@@ -562,6 +564,9 @@ function AppointerExpandRow({
             </div>
           )}
 
+          {/* アカウント */}
+          {tab === "accounts" && <AccountsView userId={u.id} />}
+
           {/* 人事評価 */}
           {tab === "eval" && <EvalPanel userId={u.id} />}
 
@@ -595,15 +600,16 @@ function AppointerExpandRow({
 // ────────────────────────────────────────────
 function AMExpandRow({ user: u, onMemoSaved }: { user: UserRecord; onMemoSaved: (id: string, memo: string) => void }) {
   const [open, setOpen] = useState(false);
-  const [tab, setTab] = useState<"status" | "eval" | "profile">("status");
+  const [tab, setTab] = useState<"status" | "accounts" | "eval" | "profile">("status");
 
   const avatar = u.icon_image_url ?? u.line_picture_url;
   const displayName = u.nickname ?? u.name ?? u.id;
 
   const TABS = [
-    { key: "status" as const,  label: "ステータス" },
-    { key: "eval"   as const,  label: "人事評価" },
-    { key: "profile" as const, label: "プロフィール" },
+    { key: "status"   as const, label: "ステータス" },
+    { key: "accounts" as const, label: "アカウント" },
+    { key: "eval"     as const, label: "人事評価" },
+    { key: "profile"  as const, label: "プロフィール" },
   ];
 
   // AMのステップは仮で7ステップ表示
@@ -683,6 +689,9 @@ function AMExpandRow({ user: u, onMemoSaved }: { user: UserRecord; onMemoSaved: 
               </div>
             </div>
           )}
+
+          {/* アカウント */}
+          {tab === "accounts" && <AccountsView userId={u.id} />}
 
           {/* 人事評価 */}
           {tab === "eval" && <EvalPanel userId={u.id} />}

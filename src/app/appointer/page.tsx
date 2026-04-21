@@ -9,6 +9,7 @@ import RoadmapAppointerRowDB from "@/components/roadmap/RoadmapAppointerRowDB";
 import SurveyNotice from "@/components/survey/SurveyNotice";
 import EvaluationResult from "@/components/evaluation/EvaluationResult";
 import { Calendar } from "lucide-react";
+import AccountsEditor from "@/components/accounts/AccountsEditor";
 import { ROADMAP_STEPS } from "@/types/roadmap";
 import type { AppointerRoadmap } from "@/types/roadmap";
 import type { PerformanceRecord } from "@/types/performance";
@@ -161,6 +162,9 @@ export default function AppointerPage() {
             ))}
           </div>
         </div>
+
+        {/* アカウント設定 */}
+        <AccountsEditor userId={myDbId} />
 
         {/* ロードマップ詳細（インタラクティブ） */}
         {roadmap && (
