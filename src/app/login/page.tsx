@@ -9,6 +9,7 @@ import { MessageCircle, FlaskConical, ChevronDown, ChevronUp } from "lucide-reac
 const ROLE_COLORS: Record<string, string> = {
   Admin:     "bg-violet-100 text-violet-800",
   AM:        "bg-teal-100 text-teal-800",
+  AM_Sales:  "bg-indigo-100 text-indigo-800",
   Sales:     "bg-emerald-100 text-emerald-800",
   Appointer: "bg-amber-100 text-amber-800",
   Bridge:    "bg-sky-100 text-sky-800",
@@ -44,7 +45,7 @@ function TestLoginSection({ callbackUrl }: { callbackUrl: string }) {
     await signIn("credentials", { userId, callbackUrl });
   }
 
-  const ORDER = ["Admin", "Sales", "AM", "Appointer", "Bridge", "Closer"];
+  const ORDER = ["Admin", "Sales", "AM", "AM_Sales", "Appointer", "Bridge", "Closer"];
   const grouped = ORDER.reduce<Record<string, TestUser[]>>((acc, role) => {
     const list = users.filter((u) => u.role === role);
     if (list.length) acc[role] = list;
