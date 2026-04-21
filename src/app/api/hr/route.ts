@@ -56,7 +56,7 @@ export async function GET() {
   // アポインター・AM取得
   let usersQuery = supabaseAdmin
     .from("users")
-    .select("id, nickname, name, role, team, line_picture_url, icon_image_url, setup_completed, created_at, education_mentor_user_id")
+    .select("id, nickname, name, role, team, line_picture_url, icon_image_url, setup_completed, created_at, education_mentor_user_id, age, gender, hobbies, self_introduction, featured_image_1_url, featured_image_2_url")
     .in("role", ["Appointer", "AM"])
     .eq("setup_completed", true)
     .order("team")

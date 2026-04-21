@@ -39,6 +39,12 @@ interface UserRecord {
   salesMemo: string;
   amName: string | null;
   education_mentor_user_id?: string | null;
+  age?: number | null;
+  gender?: string | null;
+  hobbies?: string | null;
+  self_introduction?: string | null;
+  featured_image_1_url?: string | null;
+  featured_image_2_url?: string | null;
 }
 
 // ステップツールチップ付きボタン
@@ -572,21 +578,50 @@ function AppointerExpandRow({
 
           {/* プロフィール */}
           {tab === "profile" && (
-            <div className="bg-white rounded-lg border p-3 space-y-1.5 text-xs">
-              {[
-                { label: "チーム",   value: u.team ?? "—" },
-                { label: "担当AM",   value: u.amName ?? "—" },
-                { label: "採用日",   value: u.registered_at ? new Date(u.registered_at).toLocaleDateString("ja-JP") : "—" },
-              ].map(({ label, value }) => (
-                <div key={label} className="flex gap-2">
-                  <span className="text-gray-400 w-20 shrink-0">{label}</span>
-                  <span className="text-gray-700">{value}</span>
+            <div className="space-y-3">
+              {/* 基本情報 */}
+              <div className="bg-white rounded-lg border p-3 space-y-2 text-xs">
+                {[
+                  { label: "チーム",   value: u.team ?? "—" },
+                  { label: "担当AM",   value: u.amName ?? "—" },
+                  { label: "採用日",   value: u.registered_at ? new Date(u.registered_at).toLocaleDateString("ja-JP") : "—" },
+                  { label: "年齢",     value: u.age ? `${u.age}歳` : "—" },
+                  { label: "性別",     value: u.gender ?? "—" },
+                  { label: "趣味",     value: u.hobbies?.trim() || "—" },
+                ].map(({ label, value }) => (
+                  <div key={label} className="flex gap-2">
+                    <span className="text-gray-400 w-20 shrink-0">{label}</span>
+                    <span className="text-gray-700">{value}</span>
+                  </div>
+                ))}
+                <div className="flex gap-2 items-center">
+                  <span className="text-gray-400 w-20 shrink-0">ステータス</span>
+                  <StatusBadge user={u} />
                 </div>
-              ))}
-              <div className="flex gap-2 items-center">
-                <span className="text-gray-400 w-20 shrink-0">ステータス</span>
-                <StatusBadge user={u} />
+                {u.self_introduction?.trim() && (
+                  <div className="flex gap-2">
+                    <span className="text-gray-400 w-20 shrink-0 pt-0.5">自己紹介</span>
+                    <span className="text-gray-700 whitespace-pre-line flex-1">{u.self_introduction}</span>
+                  </div>
+                )}
               </div>
+
+              {/* イチオシ写真 */}
+              {(u.featured_image_1_url || u.featured_image_2_url) && (
+                <div>
+                  <p className="text-xs font-semibold text-gray-500 mb-1.5">イチオシ写真</p>
+                  <div className="grid grid-cols-2 gap-2">
+                    {u.featured_image_1_url && (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={u.featured_image_1_url} alt="写真1" className="w-full h-32 object-cover rounded-lg border" />
+                    )}
+                    {u.featured_image_2_url && (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={u.featured_image_2_url} alt="写真2" className="w-full h-32 object-cover rounded-lg border" />
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </div>
