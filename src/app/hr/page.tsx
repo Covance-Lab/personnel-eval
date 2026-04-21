@@ -357,6 +357,78 @@ function EvalPanel({ userId }: { userId: string }) {
 }
 
 // ────────────────────────────────────────────
+// プロフィールタブ（アポインター・AM共通）
+// ────────────────────────────────────────────
+function ProfileTab({ u, showAmName = true }: { u: UserRecord; showAmName?: boolean }) {
+  const infoRows = [
+    { label: "チーム",   value: u.team ?? "—" },
+    ...(showAmName ? [{ label: "担当AM", value: u.amName ?? "—" }] : []),
+    { label: "採用日",   value: u.registered_at ? new Date(u.registered_at).toLocaleDateString("ja-JP") : "—" },
+    { label: "年齢",     value: u.age ? `${u.age}歳` : "—" },
+    { label: "性別",     value: u.gender ?? "—" },
+    { label: "趣味",     value: u.hobbies?.trim() || "—" },
+  ];
+
+  const hasBothPhotos = !!(u.featured_image_1_url && u.featured_image_2_url);
+
+  return (
+    <div className="space-y-3">
+      {/* 基本情報カード */}
+      <div className="bg-white rounded-xl border border-gray-100 overflow-hidden">
+        <div className="px-4 py-3 space-y-0">
+          {infoRows.map(({ label, value }, i) => (
+            <div
+              key={label}
+              className={`flex items-center gap-3 py-2 text-sm ${i < infoRows.length - 1 ? "border-b border-gray-50" : ""}`}
+            >
+              <span className="text-gray-400 text-xs w-16 shrink-0">{label}</span>
+              <span className="text-gray-800 font-medium">{value}</span>
+            </div>
+          ))}
+          <div className="flex items-center gap-3 py-2 border-b border-gray-50">
+            <span className="text-gray-400 text-xs w-16 shrink-0">ステータス</span>
+            <StatusBadge user={u} />
+          </div>
+          {u.self_introduction?.trim() && (
+            <div className="py-2.5">
+              <p className="text-gray-400 text-xs mb-1.5">自己紹介</p>
+              <p className="text-gray-700 text-sm whitespace-pre-line leading-relaxed">{u.self_introduction}</p>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* イチオシ写真 */}
+      {(u.featured_image_1_url || u.featured_image_2_url) && (
+        <div>
+          <p className="text-xs font-semibold text-gray-500 mb-2">イチオシ写真</p>
+          <div className={`grid gap-2 ${hasBothPhotos ? "grid-cols-2" : "grid-cols-1"}`}>
+            {u.featured_image_1_url && (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={u.featured_image_1_url}
+                alt="写真1"
+                className="w-full rounded-xl border border-gray-100 shadow-sm"
+                style={{ display: "block" }}
+              />
+            )}
+            {u.featured_image_2_url && (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={u.featured_image_2_url}
+                alt="写真2"
+                className="w-full rounded-xl border border-gray-100 shadow-sm"
+                style={{ display: "block" }}
+              />
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ────────────────────────────────────────────
 // タブ付き展開行（アポインター用）
 // ────────────────────────────────────────────
 function AppointerExpandRow({
@@ -578,51 +650,7 @@ function AppointerExpandRow({
 
           {/* プロフィール */}
           {tab === "profile" && (
-            <div className="space-y-3">
-              {/* 基本情報 */}
-              <div className="bg-white rounded-lg border p-3 space-y-2 text-xs">
-                {[
-                  { label: "チーム",   value: u.team ?? "—" },
-                  { label: "担当AM",   value: u.amName ?? "—" },
-                  { label: "採用日",   value: u.registered_at ? new Date(u.registered_at).toLocaleDateString("ja-JP") : "—" },
-                  { label: "年齢",     value: u.age ? `${u.age}歳` : "—" },
-                  { label: "性別",     value: u.gender ?? "—" },
-                  { label: "趣味",     value: u.hobbies?.trim() || "—" },
-                ].map(({ label, value }) => (
-                  <div key={label} className="flex gap-2">
-                    <span className="text-gray-400 w-20 shrink-0">{label}</span>
-                    <span className="text-gray-700">{value}</span>
-                  </div>
-                ))}
-                <div className="flex gap-2 items-center">
-                  <span className="text-gray-400 w-20 shrink-0">ステータス</span>
-                  <StatusBadge user={u} />
-                </div>
-                {u.self_introduction?.trim() && (
-                  <div className="flex gap-2">
-                    <span className="text-gray-400 w-20 shrink-0 pt-0.5">自己紹介</span>
-                    <span className="text-gray-700 whitespace-pre-line flex-1">{u.self_introduction}</span>
-                  </div>
-                )}
-              </div>
-
-              {/* イチオシ写真 */}
-              {(u.featured_image_1_url || u.featured_image_2_url) && (
-                <div>
-                  <p className="text-xs font-semibold text-gray-500 mb-1.5">イチオシ写真</p>
-                  <div className="grid grid-cols-2 gap-2">
-                    {u.featured_image_1_url && (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img src={u.featured_image_1_url} alt="写真1" className="w-full h-32 object-cover rounded-lg border" />
-                    )}
-                    {u.featured_image_2_url && (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img src={u.featured_image_2_url} alt="写真2" className="w-full h-32 object-cover rounded-lg border" />
-                    )}
-                  </div>
-                </div>
-              )}
-            </div>
+            <ProfileTab u={u} />
           )}
         </div>
       )}
@@ -733,17 +761,7 @@ function AMExpandRow({ user: u, onMemoSaved }: { user: UserRecord; onMemoSaved: 
 
           {/* プロフィール */}
           {tab === "profile" && (
-            <div className="bg-white rounded-lg border p-3 space-y-1.5 text-xs">
-              {[
-                { label: "チーム", value: u.team ?? "—" },
-                { label: "登録日", value: u.created_at ? new Date(u.created_at).toLocaleDateString("ja-JP") : "—" },
-              ].map(({ label, value }) => (
-                <div key={label} className="flex gap-2">
-                  <span className="text-gray-400 w-20 shrink-0">{label}</span>
-                  <span className="text-gray-700">{value}</span>
-                </div>
-              ))}
-            </div>
+            <ProfileTab u={u} showAmName={false} />
           )}
         </div>
       )}
