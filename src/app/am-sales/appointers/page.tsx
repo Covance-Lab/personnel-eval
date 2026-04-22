@@ -13,10 +13,10 @@
 import { useEffect, useState, useCallback, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
-import { ChevronDown, ChevronUp, Users, UserCheck, UserX, TrendingUp } from "lucide-react";
+import { ChevronDown, ChevronUp, Users, UserCheck, UserX, TrendingUp, Calendar } from "lucide-react";
 import PageLayout from "@/components/layout/PageLayout";
 import AccountsView from "@/components/accounts/AccountsView";
-import { ROADMAP_STEPS } from "@/types/roadmap";
+import { ROADMAP_STEPS, ROADMAP_PHASES } from "@/types/roadmap";
 import {
   RadarChart, Radar, PolarGrid, PolarAngleAxis,
   ResponsiveContainer, Legend,
@@ -101,6 +101,45 @@ function AMMemoEditor({ userId, initialValue, onSaved }: { userId: string; initi
           disabled={saving || value === initialValue}
           className="px-3 py-1 text-xs font-medium rounded-lg text-white disabled:opacity-40 hover:opacity-90"
           style={{ background: "linear-gradient(135deg, #cfa340, #e8c060)" }}
+        >
+          {saving ? "保存中..." : "保存"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ─── メモ編集（営業マンメモ） ─────────────────────────────────────
+function SalesMemoEditor({ userId, initialValue, onSaved }: { userId: string; initialValue: string; onSaved: (v: string) => void }) {
+  const [value, setValue] = useState(initialValue);
+  const [saving, setSaving] = useState(false);
+
+  async function save() {
+    if (value === initialValue) return;
+    setSaving(true);
+    const r = await fetch(`/api/roadmap/${userId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ sales_memo: value }),
+    });
+    if (r.ok) onSaved(value);
+    setSaving(false);
+  }
+
+  return (
+    <div className="space-y-1.5">
+      <textarea
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
+        rows={3}
+        placeholder="メモを入力..."
+        className="w-full text-xs rounded-lg border border-gray-200 p-2.5 resize-none focus:outline-none focus:ring-1 focus:ring-indigo-400 bg-white"
+      />
+      <div className="flex justify-end">
+        <button
+          onClick={save}
+          disabled={saving || value === initialValue}
+          className="px-3 py-1 text-xs font-medium rounded-lg bg-indigo-600 text-white disabled:opacity-40 hover:bg-indigo-700 transition-colors"
         >
           {saving ? "保存中..." : "保存"}
         </button>
@@ -298,11 +337,13 @@ function AppointerExpandRow({
   user: u,
   canEditAmMemo,
   onMemoSaved,
+  onSalesMemoSaved,
   onStatusChanged,
 }: {
   user: UserRecord;
   canEditAmMemo: boolean;
   onMemoSaved: (id: string, memo: string) => void;
+  onSalesMemoSaved?: (id: string, memo: string) => void;
   onStatusChanged?: (id: string, field: "churned_at" | "paused_at", value: string | null) => void;
 }) {
   const [open, setOpen] = useState(false);
@@ -312,6 +353,7 @@ function AppointerExpandRow({
 
   const avatar = u.icon_image_url ?? u.line_picture_url;
   const displayName = u.nickname ?? u.name ?? u.id;
+  const progressPct = Math.round((u.completedStepCount / ROADMAP_STEPS.length) * 100);
 
   async function saveHireDate() {
     if (!hireDate) return;
@@ -368,44 +410,55 @@ function AppointerExpandRow({
           </div>
 
           {tab === "status" && (
-            <div className="space-y-3">
+            <div className="space-y-4">
               {/* 採用日 */}
+              <div className="flex items-center gap-2 flex-wrap">
+                <Calendar className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+                <span className="text-xs text-gray-500 shrink-0">アポインター採用日：</span>
+                <input type="date" value={hireDate} onChange={(e) => setHireDate(e.target.value)}
+                  className="text-xs rounded-lg border border-gray-200 px-2 py-1 focus:outline-none focus:ring-1 focus:ring-indigo-400" />
+                <button onClick={saveHireDate} disabled={savingHire || !hireDate}
+                  className="px-2.5 py-1 text-xs rounded-lg bg-indigo-600 text-white disabled:opacity-40 hover:bg-indigo-700">
+                  {savingHire ? "保存中" : "保存"}
+                </button>
+              </div>
+
+              {/* デビューまでの進捗 */}
               <div>
-                <p className="text-xs font-semibold text-gray-700 mb-1">採用日</p>
-                <div className="flex items-center gap-2">
-                  <input type="date" value={hireDate} onChange={(e) => setHireDate(e.target.value)}
-                    className="text-xs rounded-lg border border-gray-200 px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-amber-300" />
-                  <button onClick={saveHireDate} disabled={savingHire || !hireDate}
-                    className="px-3 py-1.5 text-xs rounded-lg text-white disabled:opacity-40 hover:opacity-90"
-                    style={{ background: "linear-gradient(135deg, #cfa340, #e8c060)" }}>
-                    {savingHire ? "保存中..." : "保存"}
-                  </button>
+                <div className="flex items-center justify-between mb-1.5">
+                  <p className="text-xs font-semibold text-gray-700">デビューまでの進捗</p>
+                  <span className="text-sm font-bold text-indigo-600">{progressPct}%</span>
                 </div>
-              </div>
-              {/* ステップ進捗 */}
-              <div>
-                <p className="text-xs font-semibold text-gray-700 mb-2">ステップ進捗</p>
-                <div className="flex gap-1 flex-wrap">
-                  {ROADMAP_STEPS.map((step, idx) => {
-                    const done   = idx < u.completedStepCount;
-                    const active = idx === u.completedStepCount;
-                    return (
-                      <div key={step.id} className={`text-xs px-1.5 py-0.5 rounded ${done ? "text-gray-400" : active ? "text-indigo-700 font-semibold bg-indigo-50" : "text-gray-300"}`}>
-                        {done ? "✓" : active ? "●" : "○"} {idx + 1}. {step.label}
-                      </div>
-                    );
-                  })}
+                <div className="w-full bg-gray-200 rounded-full h-2 mb-1">
+                  <div className="bg-indigo-500 h-2 rounded-full transition-all" style={{ width: `${progressPct}%` }} />
                 </div>
+                <p className="text-xs text-gray-400">{u.completedStepCount} / {ROADMAP_STEPS.length} ステップ完了</p>
               </div>
-              {/* AMメモ */}
-              <div>
-                <p className="text-xs font-semibold text-gray-700 mb-1">AMのメモ</p>
-                {canEditAmMemo ? (
-                  <AMMemoEditor userId={u.id} initialValue={u.amMemo} onSaved={(v) => onMemoSaved(u.id, v)} />
-                ) : (
-                  <p className="text-xs text-gray-600 bg-white rounded-lg border p-2.5">{u.amMemo || <span className="text-gray-300">メモなし</span>}</p>
-                )}
+
+              {/* フェーズ別ステップ */}
+              <div className="space-y-2">
+                {ROADMAP_PHASES.map((phase) => (
+                  <div key={phase.id} className="bg-white rounded-lg border p-2.5">
+                    <p className="text-xs font-semibold text-gray-600 mb-1.5">{phase.label}</p>
+                    <div className="space-y-0.5">
+                      {phase.steps.map((step) => {
+                        const idx = ROADMAP_STEPS.findIndex((r) => r.id === step.id);
+                        const done   = idx < u.completedStepCount;
+                        const active = idx === u.completedStepCount;
+                        return (
+                          <div key={step.id} className={`flex items-center gap-1.5 text-xs px-1.5 py-0.5 rounded ${
+                            done ? "text-gray-400" : active ? "text-indigo-700 font-semibold bg-indigo-50" : "text-gray-300"
+                          }`}>
+                            <span className="shrink-0">{done ? "✓" : active ? "●" : "○"}</span>
+                            <span className={done ? "line-through" : ""}>{idx + 1}. {step.label}</span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))}
               </div>
+
               {/* 離脱・休止 */}
               {onStatusChanged && (
                 <StatusChanger
@@ -415,6 +468,26 @@ function AppointerExpandRow({
                   onChanged={(field, value) => onStatusChanged(u.id, field, value)}
                 />
               )}
+
+              {/* AMのメモ */}
+              <div>
+                <p className="text-xs font-semibold text-gray-700 mb-1">AMのメモ</p>
+                {canEditAmMemo ? (
+                  <AMMemoEditor userId={u.id} initialValue={u.amMemo} onSaved={(v) => onMemoSaved(u.id, v)} />
+                ) : (
+                  <p className="text-xs text-gray-600 bg-white rounded-lg border p-2.5">{u.amMemo || <span className="text-gray-300">メモなし</span>}</p>
+                )}
+              </div>
+
+              {/* 営業マンのメモ */}
+              <div>
+                <p className="text-xs font-semibold text-gray-700 mb-1">営業マンのメモ</p>
+                <SalesMemoEditor
+                  userId={u.id}
+                  initialValue={u.salesMemo}
+                  onSaved={(v) => onSalesMemoSaved?.(u.id, v)}
+                />
+              </div>
             </div>
           )}
           {tab === "accounts" && <AccountsView userId={u.id} />}
@@ -442,12 +515,14 @@ function AMExpandRow({
   appointers,
   onMemoSaved,
   onAppointerMemoSaved,
+  onAppointerSalesMemoSaved,
   onAppointerStatusChanged,
 }: {
   user: UserRecord;
   appointers: UserRecord[];
   onMemoSaved: (id: string, memo: string) => void;
   onAppointerMemoSaved: (id: string, memo: string) => void;
+  onAppointerSalesMemoSaved: (id: string, memo: string) => void;
   onAppointerStatusChanged: (id: string, field: "churned_at" | "paused_at", value: string | null) => void;
 }) {
   const [open, setOpen] = useState(false);
@@ -535,6 +610,7 @@ function AMExpandRow({
                     user={ap}
                     canEditAmMemo={false}
                     onMemoSaved={onAppointerMemoSaved}
+                    onSalesMemoSaved={onAppointerSalesMemoSaved}
                     onStatusChanged={onAppointerStatusChanged}
                   />
                 ))}
@@ -688,6 +764,7 @@ function AppointersPageInner() {
                     user={u}
                     canEditAmMemo
                     onMemoSaved={(id, memo) => updateUser(id, { amMemo: memo })}
+                    onSalesMemoSaved={(id, memo) => updateUser(id, { salesMemo: memo })}
                     onStatusChanged={(id, field, value) => updateUser(id, { [field]: value })}
                   />
                 ))}
@@ -717,6 +794,7 @@ function AppointersPageInner() {
                     appointers={amAppointers}
                     onMemoSaved={(id, memo) => updateUser(id, { amMemo: memo })}
                     onAppointerMemoSaved={(id, memo) => updateUser(id, { amMemo: memo })}
+                    onAppointerSalesMemoSaved={(id, memo) => updateUser(id, { salesMemo: memo })}
                     onAppointerStatusChanged={(id, field, value) => updateUser(id, { [field]: value })}
                   />
                 );

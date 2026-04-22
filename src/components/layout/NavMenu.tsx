@@ -5,7 +5,7 @@ import { useRouter, usePathname } from "next/navigation";
 import { signOut } from "next-auth/react";
 import {
   Menu, X, BarChart2, Users, Settings, User, LogOut,
-  TrendingUp, ChevronRight, UserCircle, RefreshCw,
+  TrendingUp, ChevronRight, UserCircle, RefreshCw, UserX,
 } from "lucide-react";
 import type { Role } from "@/types/user";
 import { useViewAs } from "@/contexts/ViewAsContext";
@@ -27,6 +27,7 @@ function getNavItems(role: Role, currentPath: string, router: ReturnType<typeof 
       return [
         { label: "全体実績",       href: "/overview",      icon: <BarChart2 className="w-5 h-5" />,   onClick: go("/overview"),        active: isActive("/overview") },
         { label: "人事評価",       href: "/hr",             icon: <Users className="w-5 h-5" />,       onClick: go("/hr"),              active: isActive("/hr") },
+        { label: "離脱データ",     href: "/churned",        icon: <UserX className="w-5 h-5" />,       onClick: go("/churned"),         active: isActive("/churned") },
         { label: "Admin設定",     href: "/admin",          icon: <Settings className="w-5 h-5" />,    onClick: go("/admin"),           active: isActive("/admin") },
         { label: "プロフィール設定", href: "/profile/setup", icon: <User className="w-5 h-5" />,       onClick: go("/profile/setup"),   active: isActive("/profile/setup") },
       ];
@@ -34,18 +35,21 @@ function getNavItems(role: Role, currentPath: string, router: ReturnType<typeof 
       return [
         { label: "チーム実績",      href: "/sales",         icon: <TrendingUp className="w-5 h-5" />,  onClick: go("/sales"),          active: isActive("/sales") },
         { label: "アポインター管理", href: "/hr",             icon: <Users className="w-5 h-5" />,       onClick: go("/hr"),             active: isActive("/hr") },
+        { label: "離脱データ",      href: "/churned",        icon: <UserX className="w-5 h-5" />,       onClick: go("/churned"),        active: isActive("/churned") },
         { label: "プロフィール設定", href: "/profile/setup", icon: <User className="w-5 h-5" />,       onClick: go("/profile/setup"),  active: isActive("/profile/setup") },
       ];
     case "AM":
       return [
         { label: "数値管理",        href: "/am",             icon: <BarChart2 className="w-5 h-5" />,   onClick: go("/am"),              active: currentPath === "/am" },
         { label: "アポインター管理", href: "/am/appointers",  icon: <Users className="w-5 h-5" />,       onClick: go("/am/appointers"),   active: isActive("/am/appointers") },
+        { label: "離脱データ",      href: "/churned",        icon: <UserX className="w-5 h-5" />,       onClick: go("/churned"),         active: isActive("/churned") },
         { label: "プロフィール設定", href: "/profile/setup",  icon: <User className="w-5 h-5" />,       onClick: go("/profile/setup"),   active: isActive("/profile/setup") },
       ];
     case "AM_Sales":
       return [
         { label: "数値管理",        href: "/am-sales",             icon: <BarChart2 className="w-5 h-5" />, onClick: go("/am-sales"),           active: currentPath === "/am-sales" },
         { label: "アポインター管理", href: "/am-sales/appointers",  icon: <Users className="w-5 h-5" />,    onClick: go("/am-sales/appointers"), active: isActive("/am-sales/appointers") },
+        { label: "離脱データ",      href: "/churned",              icon: <UserX className="w-5 h-5" />,    onClick: go("/churned"),             active: isActive("/churned") },
         { label: "プロフィール設定", href: "/profile/setup",        icon: <User className="w-5 h-5" />,     onClick: go("/profile/setup"),       active: isActive("/profile/setup") },
       ];
     case "Appointer":

@@ -874,8 +874,9 @@ export default function HRPage() {
 
   // ── Sales専用ビュー ────────────────────────────────
   if (isSales) {
-    const appointers = users.filter((u) => u.role === "Appointer");
-    const ams        = users.filter((u) => u.role === "AM");
+    // 離脱済みは除外（離脱データページへ）
+    const appointers = users.filter((u) => u.role === "Appointer" && !u.churned_at);
+    const ams        = users.filter((u) => u.role === "AM" || u.role === "AM_Sales");
 
     return (
       <PageLayout title="アポインター管理" role={role ?? "Sales"} userName={userName} userImage={image} userTeam={team}>
@@ -977,14 +978,15 @@ export default function HRPage() {
 
   const filtered = users.filter((u) => {
     if (filterTeam !== "全体" && u.team !== filterTeam) return false;
+    // 離脱済みは離脱データページへ移動 → 通常リストから除外
+    if (u.churned_at) return false;
     if (filterStatus === "デビュー済み") return u.debuted && !u.isChurned;
     if (filterStatus === "デビュー前") return !u.debuted;
-    if (filterStatus === "離脱") return u.isChurned;
     return true;
   });
 
   const appointers = filtered.filter((u) => u.role === "Appointer");
-  const ams = filtered.filter((u) => u.role === "AM");
+  const ams = filtered.filter((u) => u.role === "AM" || u.role === "AM_Sales");
 
   return (
     <PageLayout title="人事評価" role={role ?? "Admin"} userName={userName} userImage={image} userTeam={team}>
