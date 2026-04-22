@@ -27,7 +27,7 @@ export async function GET(req: NextRequest) {
   if (!session?.user?.dbId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
-  if (!["Admin", "AM", "Sales"].includes(session.user.role)) {
+  if (!["Admin", "AM", "AM_Sales", "Sales"].includes(session.user.role)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
