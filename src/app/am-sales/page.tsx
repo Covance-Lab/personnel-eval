@@ -3,42 +3,32 @@
 /**
  * AM_Sales 兼任者 — 数値管理ダッシュボード
  *
- * 3セクション:
- *   1. チーム全体の合計（DM〜契約、ファネル）
- *   2. 自分管轄のアポインター合計
- *   3. 他AMが管理するアポインター合計
+ * チーム全体: Salesページと同じ2列ペア形式 + 売上
+ * 自分管轄 / 他AM管轄: プルダウン折り畳み
  */
 
 import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
-import { TrendingUp, TrendingDown, Minus, Users, ChevronDown, ChevronUp } from "lucide-react";
+import { TrendingUp, TrendingDown, Minus, ChevronDown, ChevronUp, Users } from "lucide-react";
 import PageLayout from "@/components/layout/PageLayout";
 
 // ─── 型 ────────────────────────────────────────────────────────────
-interface PerfSection {
+interface Section {
   appointerCount: number;
   dmCount: number;
-  bSetCount: number;
-  bSetRate: number;
-}
-
-interface FunnelSection {
-  bExecCount: number;
-  aSetCount: number;
-  aExecCount: number;
-  contractCount: number;
-  bExecRate: number;
-  aSetRate: number;
-  aExecRate: number;
-  contractRate: number;
+  bSetCount: number;   bSetRate: number;
+  bExecCount: number;  bExecRate: number;
+  aSetCount: number;   aSetRate: number;
+  aExecCount: number;  aExecRate: number;
+  contractCount: number; contractRate: number;
+  revenue?: number;
 }
 
 interface StatsHalf {
-  teamTotal: PerfSection;
-  ownAppointers: PerfSection;
-  otherAMs: PerfSection;
-  funnel: FunnelSection;
+  teamTotal: Section;
+  ownAppointers: Section;
+  otherAMs: Section;
 }
 
 interface StatsResponse {
@@ -56,98 +46,143 @@ function Diff({ curr, prev, suffix = "" }: { curr: number; prev: number; suffix?
   return <span className="text-xs text-red-500 flex items-center gap-0.5"><TrendingDown className="w-3 h-3" />−{Math.abs(diff).toLocaleString()}{suffix}</span>;
 }
 
-// ─── 数値カード ────────────────────────────────────────────────────
+// ─── 単一セル ─────────────────────────────────────────────────────
 function StatCell({
-  label,
-  curr,
-  prev,
-  suffix = "",
-  highlight = false,
+  label, curr, prev, suffix, highlight = false,
 }: {
-  label: string;
-  curr: number;
-  prev: number;
-  suffix?: string;
-  highlight?: boolean;
+  label: string; curr: number; prev: number; suffix: string; highlight?: boolean;
 }) {
   return (
-    <div className={`flex flex-col gap-0.5 p-3 rounded-xl ${highlight ? "bg-amber-50 border border-amber-100" : "bg-white border border-gray-100"}`}>
-      <p className="text-xs text-gray-400">{label}</p>
-      <p className={`text-lg font-bold ${highlight ? "text-amber-700" : "text-gray-800"}`}>
-        {curr.toLocaleString()}{suffix}
+    <div className={`rounded-xl border p-3 space-y-1 ${highlight ? "bg-amber-50 border-amber-100" : "bg-white"}`}>
+      <p className="text-sm font-semibold text-gray-700">{label}</p>
+      <p className="text-xl font-bold leading-none text-gray-900">
+        {curr.toLocaleString()}
+        <span className="text-xs font-normal text-gray-400 ml-0.5">{suffix}</span>
       </p>
       <Diff curr={curr} prev={prev} suffix={suffix} />
     </div>
   );
 }
 
-// ─── セクションカード ───────────────────────────────────────────────
-function SectionCard({
-  title,
-  subtitle,
-  accentColor,
-  curr,
-  prev,
-  funnel,
-  defaultOpen = true,
+// ─── チーム全体カード（Salesページと同形式） ────────────────────────
+function TeamCard({ curr, prev }: { curr: Section; prev: Section }) {
+  type Pair = [
+    { label: string; curr: number; prev: number; suffix: string; highlight?: boolean } | null,
+    { label: string; curr: number; prev: number; suffix: string; highlight?: boolean } | null,
+  ];
+
+  const pairs: Pair[] = [
+    [{ label: "DM数", curr: curr.dmCount,       prev: prev.dmCount,       suffix: "件" }, null],
+    [
+      { label: "B設定",   curr: curr.bSetCount,   prev: prev.bSetCount,   suffix: "件" },
+      { label: "B設定率", curr: curr.bSetRate,    prev: prev.bSetRate,    suffix: "%" },
+    ],
+    [
+      { label: "B実施",   curr: curr.bExecCount,  prev: prev.bExecCount,  suffix: "件" },
+      { label: "B実施率", curr: curr.bExecRate,   prev: prev.bExecRate,   suffix: "%" },
+    ],
+    [
+      { label: "A設定",   curr: curr.aSetCount,   prev: prev.aSetCount,   suffix: "件" },
+      { label: "A設定率", curr: curr.aSetRate,    prev: prev.aSetRate,    suffix: "%" },
+    ],
+    [
+      { label: "A実施",   curr: curr.aExecCount,  prev: prev.aExecCount,  suffix: "件" },
+      { label: "A実施率", curr: curr.aExecRate,   prev: prev.aExecRate,   suffix: "%" },
+    ],
+    [
+      { label: "契約",   curr: curr.contractCount, prev: prev.contractCount, suffix: "件", highlight: true },
+      { label: "契約率", curr: curr.contractRate,  prev: prev.contractRate,  suffix: "%",  highlight: true },
+    ],
+    [
+      { label: "売上", curr: curr.revenue ?? 0, prev: prev.revenue ?? 0, suffix: "円", highlight: true },
+      null,
+    ],
+  ];
+
+  return (
+    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+      <div className="px-4 pt-3 pb-1 border-b border-gray-50 flex items-center gap-2">
+        <div className="w-1 h-5 rounded-full" style={{ background: "#cfa340" }} />
+        <p className="text-sm font-bold text-gray-800">チーム全体</p>
+        <span className="text-xs text-gray-400 ml-auto flex items-center gap-1">
+          <Users className="w-3.5 h-3.5" />{curr.appointerCount}名
+        </span>
+      </div>
+      <div className="p-4 space-y-2">
+        {pairs.map(([left, right], i) => (
+          <div key={i} className="grid grid-cols-2 gap-2">
+            {left  ? <StatCell {...left}  /> : <div />}
+            {right ? <StatCell {...right} /> : <div />}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ─── 管轄別プルダウンカード ─────────────────────────────────────────
+function SectionDropdown({
+  title, subtitle, accentColor, curr, prev, defaultOpen = false,
 }: {
-  title: string;
-  subtitle?: string;
-  accentColor: string;
-  curr: PerfSection;
-  prev: PerfSection;
-  funnel?: FunnelSection;
-  defaultOpen?: boolean;
+  title: string; subtitle?: string; accentColor: string;
+  curr: Section; prev: Section; defaultOpen?: boolean;
 }) {
   const [open, setOpen] = useState(defaultOpen);
 
+  type Pair = [
+    { label: string; curr: number; prev: number; suffix: string } | null,
+    { label: string; curr: number; prev: number; suffix: string } | null,
+  ];
+
+  const pairs: Pair[] = [
+    [{ label: "DM数", curr: curr.dmCount, prev: prev.dmCount, suffix: "件" }, null],
+    [
+      { label: "B設定",   curr: curr.bSetCount,    prev: prev.bSetCount,    suffix: "件" },
+      { label: "B設定率", curr: curr.bSetRate,     prev: prev.bSetRate,     suffix: "%" },
+    ],
+    [
+      { label: "B実施",   curr: curr.bExecCount,   prev: prev.bExecCount,   suffix: "件" },
+      { label: "B実施率", curr: curr.bExecRate,    prev: prev.bExecRate,    suffix: "%" },
+    ],
+    [
+      { label: "A設定",   curr: curr.aSetCount,    prev: prev.aSetCount,    suffix: "件" },
+      { label: "A設定率", curr: curr.aSetRate,     prev: prev.aSetRate,     suffix: "%" },
+    ],
+    [
+      { label: "A実施",   curr: curr.aExecCount,   prev: prev.aExecCount,   suffix: "件" },
+      { label: "A実施率", curr: curr.aExecRate,    prev: prev.aExecRate,    suffix: "%" },
+    ],
+    [
+      { label: "契約",   curr: curr.contractCount, prev: prev.contractCount, suffix: "件" },
+      { label: "契約率", curr: curr.contractRate,  prev: prev.contractRate,  suffix: "%" },
+    ],
+  ];
+
   return (
-    <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden shadow-sm">
-      {/* ヘッダー */}
+    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
       <button
         onClick={() => setOpen((v) => !v)}
-        className="w-full flex items-center justify-between px-4 py-3"
+        className="w-full flex items-center gap-2.5 px-4 py-3"
       >
-        <div className="flex items-center gap-2.5">
-          <div className="w-1 h-8 rounded-full" style={{ background: accentColor }} />
-          <div className="text-left">
-            <p className="text-sm font-bold text-gray-800">{title}</p>
-            {subtitle && <p className="text-xs text-gray-400">{subtitle}</p>}
-          </div>
+        <div className="w-1 h-6 rounded-full shrink-0" style={{ background: accentColor }} />
+        <div className="flex-1 text-left">
+          <p className="text-sm font-bold text-gray-800">{title}</p>
+          {subtitle && <p className="text-xs text-gray-400">{subtitle}</p>}
         </div>
-        {open ? <ChevronUp className="w-4 h-4 text-gray-400" /> : <ChevronDown className="w-4 h-4 text-gray-400" />}
+        <span className="text-xs text-gray-400 mr-2 flex items-center gap-1">
+          <Users className="w-3.5 h-3.5" />{curr.appointerCount}名
+        </span>
+        {open ? <ChevronUp className="w-4 h-4 text-gray-400 shrink-0" /> : <ChevronDown className="w-4 h-4 text-gray-400 shrink-0" />}
       </button>
 
       {open && (
-        <div className="px-4 pb-4 space-y-3">
-          {/* アポインター数バッジ */}
-          <div className="flex items-center gap-1.5 text-xs text-gray-500">
-            <Users className="w-3.5 h-3.5" />
-            <span>アポインター {curr.appointerCount}名</span>
-          </div>
-
-          {/* DM・B設定グリッド */}
-          <div className="grid grid-cols-2 gap-2">
-            <StatCell label="DM数" curr={curr.dmCount} prev={prev.dmCount} suffix="件" />
-            <StatCell label="B設定" curr={curr.bSetCount} prev={prev.bSetCount} suffix="件" />
-            <StatCell label="B設定率" curr={curr.bSetRate} prev={prev.bSetRate} suffix="%" />
-            {funnel ? (
-              <StatCell label="B実施" curr={funnel.bExecCount} prev={0} suffix="件" />
-            ) : null}
-          </div>
-
-          {/* ファネル（チーム全体のみ） */}
-          {funnel && (
-            <div>
-              <p className="text-xs font-semibold text-gray-500 mb-2">商談ファネル</p>
-              <div className="grid grid-cols-2 gap-2">
-                <StatCell label="B実施率" curr={funnel.bExecRate} prev={0} suffix="%" />
-                <StatCell label="A設定" curr={funnel.aSetCount} prev={0} suffix="件" />
-                <StatCell label="A実施" curr={funnel.aExecCount} prev={0} suffix="件" />
-                <StatCell label="契約" curr={funnel.contractCount} prev={0} suffix="件" highlight />
-              </div>
+        <div className="px-4 pb-4 border-t border-gray-50 pt-3 space-y-2">
+          {pairs.map(([left, right], i) => (
+            <div key={i} className="grid grid-cols-2 gap-2">
+              {left  ? <StatCell {...left}  /> : <div />}
+              {right ? <StatCell {...right} /> : <div />}
             </div>
-          )}
+          ))}
         </div>
       )}
     </div>
@@ -206,24 +241,16 @@ export default function AMSalesPage() {
       <div className="max-w-lg mx-auto px-4 py-6 space-y-4">
         {/* ヘッダー */}
         <div>
-          <p className="text-xs text-gray-400">{monthLabel}</p>
+          <p className="text-xs text-gray-400">{monthLabel}（前月比）</p>
           <h1 className="text-lg font-bold text-gray-800">数値管理</h1>
-          <p className="text-xs text-gray-500 mt-0.5">チーム: {stats.team}</p>
+          <p className="text-xs text-gray-500 mt-0.5">{stats.team}チーム</p>
         </div>
 
-        {/* 1. チーム全体 */}
-        <SectionCard
-          title="チーム全体"
-          subtitle={`${stats.team}チーム合計`}
-          accentColor="#cfa340"
-          curr={stats.curr.teamTotal}
-          prev={stats.prev.teamTotal}
-          funnel={stats.curr.funnel}
-          defaultOpen
-        />
+        {/* 1. チーム全体（Salesと同形式） */}
+        <TeamCard curr={stats.curr.teamTotal} prev={stats.prev.teamTotal} />
 
-        {/* 2. 自分管轄のアポインター */}
-        <SectionCard
+        {/* 2. 自分管轄のアポインター（プルダウン） */}
+        <SectionDropdown
           title="自分管轄のアポインター"
           subtitle="自分が教育係のアポインター"
           accentColor="#6366f1"
@@ -232,8 +259,8 @@ export default function AMSalesPage() {
           defaultOpen
         />
 
-        {/* 3. 他AMが管理するアポインター */}
-        <SectionCard
+        {/* 3. 他AM管轄のアポインター（プルダウン） */}
+        <SectionDropdown
           title="他AM管轄のアポインター"
           subtitle={`同チームの他AM ${stats.otherAMCount}名が管理`}
           accentColor="#64748b"
