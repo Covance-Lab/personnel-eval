@@ -703,17 +703,17 @@ function AppointersPageInner() {
     setAllUsers((prev) => prev.map((u) => u.id === id ? { ...u, ...patch } : u));
   }
 
-  // 自分管轄のアポインター
+  // 自分管轄のアポインター（離脱済み除外）
   const ownAppointers = allUsers.filter(
-    (u) => u.role === "Appointer" && u.education_mentor_user_id === myId
+    (u) => u.role === "Appointer" && u.education_mentor_user_id === myId && !u.churned_at
   );
 
-  // 他AM（自分以外のAM/AM_Sales）とそのアポインター
+  // 他AM（自分以外のAM/AM_Sales）とそのアポインター（離脱済み除外）
   const otherAMs = allUsers.filter(
     (u) => ["AM", "AM_Sales"].includes(u.role) && u.id !== myId
   );
   const otherAppointers = allUsers.filter(
-    (u) => u.role === "Appointer" && u.education_mentor_user_id !== myId
+    (u) => u.role === "Appointer" && u.education_mentor_user_id !== myId && !u.churned_at
   );
 
   return (

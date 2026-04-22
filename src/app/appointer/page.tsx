@@ -11,6 +11,42 @@ import EvaluationResult from "@/components/evaluation/EvaluationResult";
 import { Calendar } from "lucide-react";
 import AccountsEditor from "@/components/accounts/AccountsEditor";
 import { ROADMAP_STEPS } from "@/types/roadmap";
+
+// ─── ドーナツチャート ──────────────────────────────────────────────
+function DonutChart({ achieve, label, value, target, suffix, color }: {
+  achieve: number; label: string; value: number | string; target: number | string; suffix: string; color: string;
+}) {
+  const pct = Math.min(achieve, 100);
+  const r = 36;
+  const circ = 2 * Math.PI * r;
+  const dash = (pct / 100) * circ;
+
+  return (
+    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 flex flex-col items-center gap-2">
+      <p className="text-xs font-semibold text-gray-600">{label}</p>
+      <div className="relative">
+        <svg width="96" height="96" viewBox="0 0 96 96">
+          <circle cx="48" cy="48" r={r} fill="none" stroke="#e5e7eb" strokeWidth="10" />
+          <circle
+            cx="48" cy="48" r={r} fill="none"
+            stroke={color} strokeWidth="10"
+            strokeDasharray={`${dash} ${circ - dash}`}
+            strokeLinecap="round"
+            transform="rotate(-90 48 48)"
+          />
+        </svg>
+        <div className="absolute inset-0 flex flex-col items-center justify-center">
+          <span className="text-lg font-bold leading-none" style={{ color }}>{achieve}%</span>
+          <span className="text-[10px] text-gray-400">達成</span>
+        </div>
+      </div>
+      <div className="text-center">
+        <p className="text-2xl font-bold text-gray-800 leading-none">{typeof value === "number" ? value.toLocaleString() : value}<span className="text-sm font-normal text-gray-400 ml-0.5">{suffix}</span></p>
+        <p className="text-xs text-gray-400 mt-1">目標: {typeof target === "number" ? target.toLocaleString() : target}{suffix}</p>
+      </div>
+    </div>
+  );
+}
 import type { AppointerRoadmap } from "@/types/roadmap";
 import type { PerformanceRecord } from "@/types/performance";
 
@@ -115,42 +151,7 @@ export default function AppointerPage() {
         {/* アンケート通知 */}
         <SurveyNotice userId={myDbId} />
 
-        {/* デビューステータス — 一番上 */}
-        <div className={`rounded-2xl p-5 ${debuted ? "bg-green-50 border border-green-200" : "bg-indigo-50 border border-indigo-200"}`}>
-          {debuted ? (
-            <div className="text-center">
-              <p className="text-4xl font-bold text-green-700 mb-1">100%</p>
-              <p className="text-sm font-semibold text-green-700">デビュー済み</p>
-              <p className="text-xs text-green-500 mt-1">全ステップ完了おめでとうございます！</p>
-            </div>
-          ) : (
-            <div>
-              <div className="flex justify-between items-center mb-2">
-                <p className="text-sm font-semibold text-indigo-700">デビューまでの進捗</p>
-                <span className="text-2xl font-bold text-indigo-700">{Math.round((stepCount / ROADMAP_STEPS.length) * 100)}%</span>
-              </div>
-              {/* プログレスバー */}
-              <div className="w-full bg-indigo-200 rounded-full h-3 mb-2">
-                <div
-                  className="bg-indigo-500 h-3 rounded-full transition-all"
-                  style={{ width: `${Math.round((stepCount / ROADMAP_STEPS.length) * 100)}%` }}
-                />
-              </div>
-              <div className="flex justify-between items-center">
-                <p className="text-xs text-indigo-600">
-                  {stepCount} / {ROADMAP_STEPS.length} ステップ完了
-                </p>
-                {currentStep && (
-                  <p className="text-xs text-indigo-600">
-                    現在: <span className="font-semibold">{currentStep.label}</span>
-                  </p>
-                )}
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* 今月の数字 + 達成率 */}
+        {/* 当月実績 — ドーナツチャート3列 */}
         {(() => {
           const DM_TARGET   = 625;
           const SET_TARGET  = 7;
@@ -158,38 +159,15 @@ export default function AppointerPage() {
           const dmAchieve   = DM_TARGET   > 0 ? Math.round((dmCount   / DM_TARGET)   * 100) : 0;
           const setAchieve  = SET_TARGET  > 0 ? Math.round((bSetCount / SET_TARGET)  * 100) : 0;
           const rateAchieve = RATE_TARGET > 0 ? Math.round((bSetRate  / RATE_TARGET) * 100) : 0;
-
-          const cols = [
-            { label: "DM数",   value: dmCount,   suffix: "件", target: DM_TARGET,   achieve: dmAchieve,   unit: "件" },
-            { label: "B設定数", value: bSetCount, suffix: "件", target: SET_TARGET,  achieve: setAchieve,  unit: "件" },
-            { label: "B設定率", value: bSetRate,  suffix: "%",  target: RATE_TARGET, achieve: rateAchieve, unit: "%" },
-          ];
+          const color = (pct: number) => pct >= 100 ? "#22c55e" : pct >= 70 ? "#f59e0b" : "#6366f1";
 
           return (
             <div>
-              <p className="text-xs text-gray-400 mb-2">{thisYear}年{thisMonth}月の実績</p>
-              <div className="space-y-2">
-                {cols.map(({ label, value, suffix, target, achieve }) => (
-                  <div key={label} className="bg-white rounded-xl border px-4 py-3">
-                    <div className="flex items-center justify-between mb-1.5">
-                      <p className="text-xs text-gray-500">{label}</p>
-                      <div className="text-right">
-                        <span className="text-lg font-bold">{value.toLocaleString()}</span>
-                        <span className="text-xs text-gray-400 ml-0.5">{suffix}</span>
-                        <span className="text-xs text-gray-400 ml-2">/ 目標 {target}{suffix}</span>
-                      </div>
-                    </div>
-                    <div className="w-full bg-gray-100 rounded-full h-1.5 mb-1">
-                      <div
-                        className={`h-1.5 rounded-full transition-all ${achieve >= 100 ? "bg-green-500" : achieve >= 70 ? "bg-amber-400" : "bg-indigo-400"}`}
-                        style={{ width: `${Math.min(achieve, 100)}%` }}
-                      />
-                    </div>
-                    <p className={`text-xs font-semibold text-right ${achieve >= 100 ? "text-green-600" : achieve >= 70 ? "text-amber-600" : "text-indigo-600"}`}>
-                      達成率 {achieve}%
-                    </p>
-                  </div>
-                ))}
+              <p className="text-xs text-gray-400 mb-3">{thisYear}年{thisMonth}月 — チーム合計</p>
+              <div className="grid grid-cols-3 gap-2">
+                <DonutChart achieve={dmAchieve}   label="DM送信数" value={dmCount}   target={DM_TARGET}   suffix="通" color={color(dmAchieve)} />
+                <DonutChart achieve={setAchieve}  label="B設定数"  value={bSetCount}  target={SET_TARGET}  suffix="件" color={color(setAchieve)} />
+                <DonutChart achieve={rateAchieve} label="B設定率"  value={bSetRate.toFixed(2)} target="1.00" suffix="%" color={color(rateAchieve)} />
               </div>
             </div>
           );

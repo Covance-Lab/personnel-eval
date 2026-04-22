@@ -132,7 +132,7 @@ function TeamSheetForm({ team, onSynced }: { team: TeamGroup | "全チーム"; o
       <CardHeader className="pb-3">
         <div className="flex items-center justify-between">
           <CardTitle className="text-base flex items-center gap-2">
-            <Link2 className="w-4 h-4" /> スプレッドシート設定（全チーム統合）
+            <Link2 className="w-4 h-4" /> DM数の取得
           </CardTitle>
           {cfg && <Badge variant="secondary" className="text-xs">連携済み</Badge>}
         </div>
@@ -344,7 +344,7 @@ function AggregateSheetForm() {
     <Card className="border-l-4 border-l-amber-400">
       <CardHeader className="pb-3">
         <CardTitle className="text-base flex items-center gap-2">
-          <BarChart2 className="w-4 h-4" /> 集計シート設定（B実施数・A設定数・売上など）
+          <BarChart2 className="w-4 h-4" /> B設定〜契約数の取得
         </CardTitle>
         <p className="text-xs text-gray-500">アポインター別シートとは別の、組織全体の集計シートを年ごとに登録します。</p>
       </CardHeader>
@@ -521,7 +521,7 @@ function MemberMasterSheetForm() {
       <CardHeader className="pb-3">
         <div className="flex items-center justify-between">
           <CardTitle className="text-base flex items-center gap-2">
-            <Users className="w-4 h-4" /> メンバーマスタシート設定
+            <Users className="w-4 h-4" /> メンバーマスタの取得
           </CardTitle>
           {spreadsheetId && <Badge variant="secondary" className="text-xs">連携済み</Badge>}
         </div>

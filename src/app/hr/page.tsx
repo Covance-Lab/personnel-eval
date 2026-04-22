@@ -588,31 +588,33 @@ function AppointerExpandRow({
                 <p className="text-xs text-gray-400">{stepCount} / {ROADMAP_STEPS.length} ステップ完了{savingStep ? "　保存中..." : ""}</p>
               </div>
 
-              {/* フェーズ別ステップ（クリックで完了数を変更） */}
+              {/* フェーズ別ステップ（完了ボタン形式） */}
               <div className="space-y-2">
-                <p className="text-xs text-gray-400">ステップをタップして完了数を変更できます</p>
+                {savingStep && <p className="text-xs text-gray-400 text-center">保存中...</p>}
                 {ROADMAP_PHASES.map((phase) => (
                   <div key={phase.id} className="bg-white rounded-lg border p-2.5">
-                    <p className="text-xs font-semibold text-gray-600 mb-1.5">{phase.label}</p>
-                    <div className="space-y-0.5">
+                    <p className="text-xs font-semibold text-gray-600 mb-2">{phase.label}</p>
+                    <div className="space-y-1.5">
                       {phase.steps.map((step) => {
-                        const idx = ROADMAP_STEPS.findIndex((r) => r.id === step.id);
-                        const done   = idx < stepCount;
-                        const active = idx === stepCount;
-                        // クリックで完了数をそのステップの次に設定（済みをクリックで1つ戻す）
-                        const newCount = done ? idx : idx + 1;
+                        const idx  = ROADMAP_STEPS.findIndex((r) => r.id === step.id);
+                        const done = idx < stepCount;
                         return (
-                          <button
-                            key={step.id}
-                            onClick={() => saveStepCount(newCount)}
-                            disabled={savingStep}
-                            className={`w-full flex items-center gap-1.5 text-xs px-1.5 py-1 rounded text-left transition-colors ${
-                              done ? "text-gray-400 hover:bg-gray-50" : active ? "text-indigo-700 font-semibold bg-indigo-50 hover:bg-indigo-100" : "text-gray-300 hover:bg-gray-50"
-                            }`}
-                          >
-                            <span className="shrink-0">{done ? "✓" : active ? "●" : "○"}</span>
-                            <span className={done ? "line-through" : ""}>{idx + 1}. {step.label}</span>
-                          </button>
+                          <div key={step.id} className="flex items-center gap-2">
+                            <span className={`flex-1 text-xs ${done ? "text-gray-400 line-through" : "text-gray-700"}`}>
+                              {idx + 1}. {step.label}
+                            </span>
+                            <button
+                              onClick={() => saveStepCount(done ? idx : idx + 1)}
+                              disabled={savingStep}
+                              className={`shrink-0 px-2.5 py-1 rounded-lg text-xs font-semibold border transition-colors disabled:opacity-40 ${
+                                done
+                                  ? "bg-indigo-600 text-white border-indigo-600 hover:bg-indigo-700"
+                                  : "bg-white text-gray-400 border-gray-200 hover:border-indigo-400 hover:text-indigo-600"
+                              }`}
+                            >
+                              {done ? "完了済" : "完了"}
+                            </button>
+                          </div>
                         );
                       })}
                     </div>
