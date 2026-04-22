@@ -459,6 +459,9 @@ function AppointerExpandRow({
 
   const [hireDate, setHireDate] = useState(u.registered_at ? u.registered_at.slice(0, 10) : "");
   const [savingHireDate, setSavingHireDate] = useState(false);
+  const [stepCount, setStepCount] = useState(u.completedStepCount);
+  const [savingStep, setSavingStep] = useState(false);
+
   async function saveHireDate() {
     if (!hireDate) return;
     setSavingHireDate(true);
@@ -468,6 +471,17 @@ function AppointerExpandRow({
       body: JSON.stringify({ registered_at: new Date(hireDate + "T00:00:00").toISOString() }),
     });
     setSavingHireDate(false);
+  }
+
+  async function saveStepCount(newCount: number) {
+    setSavingStep(true);
+    await fetch(`/api/roadmap/${u.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ completed_step_count: newCount }),
+    });
+    setStepCount(newCount);
+    setSavingStep(false);
   }
 
   const TABS = [
@@ -544,61 +558,61 @@ function AppointerExpandRow({
               <div className="flex items-center gap-2 flex-wrap">
                 <Calendar className="w-3.5 h-3.5 text-gray-400 shrink-0" />
                 <span className="text-xs text-gray-500 shrink-0">アポインター採用日：</span>
-                {(isAdmin || isAM) ? (
-                  <>
-                    <input
-                      type="date"
-                      value={hireDate}
-                      onChange={(e) => setHireDate(e.target.value)}
-                      className="text-xs rounded-lg border border-gray-200 px-2 py-1 focus:outline-none focus:ring-1 focus:ring-indigo-400"
-                    />
-                    <button
-                      onClick={saveHireDate}
-                      disabled={savingHireDate || !hireDate}
-                      className="px-2.5 py-1 text-xs rounded-lg bg-indigo-600 text-white disabled:opacity-40 hover:bg-indigo-700"
-                    >
-                      {savingHireDate ? "保存中" : "保存"}
-                    </button>
-                  </>
-                ) : (
-                  <span className="text-xs font-semibold text-gray-700">
-                    {u.registered_at ? new Date(u.registered_at).toLocaleDateString("ja-JP") : "—"}
-                  </span>
-                )}
+                <input
+                  type="date"
+                  value={hireDate}
+                  onChange={(e) => setHireDate(e.target.value)}
+                  className="text-xs rounded-lg border border-gray-200 px-2 py-1 focus:outline-none focus:ring-1 focus:ring-indigo-400"
+                />
+                <button
+                  onClick={saveHireDate}
+                  disabled={savingHireDate || !hireDate}
+                  className="px-2.5 py-1 text-xs rounded-lg bg-indigo-600 text-white disabled:opacity-40 hover:bg-indigo-700"
+                >
+                  {savingHireDate ? "保存中" : "保存"}
+                </button>
               </div>
 
               {/* デビューまでの進捗 */}
               <div>
                 <div className="flex items-center justify-between mb-1.5">
                   <p className="text-xs font-semibold text-gray-700">デビューまでの進捗</p>
-                  <span className="text-sm font-bold text-indigo-600">{progressPct}%</span>
+                  <span className="text-sm font-bold text-indigo-600">{Math.round((stepCount / ROADMAP_STEPS.length) * 100)}%</span>
                 </div>
                 <div className="w-full bg-gray-200 rounded-full h-2 mb-1">
                   <div
                     className="bg-indigo-500 h-2 rounded-full transition-all"
-                    style={{ width: `${progressPct}%` }}
+                    style={{ width: `${Math.round((stepCount / ROADMAP_STEPS.length) * 100)}%` }}
                   />
                 </div>
-                <p className="text-xs text-gray-400">{u.completedStepCount} / {ROADMAP_STEPS.length} ステップ完了</p>
+                <p className="text-xs text-gray-400">{stepCount} / {ROADMAP_STEPS.length} ステップ完了{savingStep ? "　保存中..." : ""}</p>
               </div>
 
-              {/* フェーズ別ステップ */}
+              {/* フェーズ別ステップ（クリックで完了数を変更） */}
               <div className="space-y-2">
+                <p className="text-xs text-gray-400">ステップをタップして完了数を変更できます</p>
                 {ROADMAP_PHASES.map((phase) => (
                   <div key={phase.id} className="bg-white rounded-lg border p-2.5">
                     <p className="text-xs font-semibold text-gray-600 mb-1.5">{phase.label}</p>
                     <div className="space-y-0.5">
                       {phase.steps.map((step) => {
                         const idx = ROADMAP_STEPS.findIndex((r) => r.id === step.id);
-                        const done   = idx < u.completedStepCount;
-                        const active = idx === u.completedStepCount;
+                        const done   = idx < stepCount;
+                        const active = idx === stepCount;
+                        // クリックで完了数をそのステップの次に設定（済みをクリックで1つ戻す）
+                        const newCount = done ? idx : idx + 1;
                         return (
-                          <div key={step.id} className={`flex items-center gap-1.5 text-xs px-1.5 py-0.5 rounded ${
-                            done ? "text-gray-400" : active ? "text-indigo-700 font-semibold bg-indigo-50" : "text-gray-300"
-                          }`}>
+                          <button
+                            key={step.id}
+                            onClick={() => saveStepCount(newCount)}
+                            disabled={savingStep}
+                            className={`w-full flex items-center gap-1.5 text-xs px-1.5 py-1 rounded text-left transition-colors ${
+                              done ? "text-gray-400 hover:bg-gray-50" : active ? "text-indigo-700 font-semibold bg-indigo-50 hover:bg-indigo-100" : "text-gray-300 hover:bg-gray-50"
+                            }`}
+                          >
                             <span className="shrink-0">{done ? "✓" : active ? "●" : "○"}</span>
                             <span className={done ? "line-through" : ""}>{idx + 1}. {step.label}</span>
-                          </div>
+                          </button>
                         );
                       })}
                     </div>
@@ -661,7 +675,7 @@ function AppointerExpandRow({
 // ────────────────────────────────────────────
 // タブ付き展開行（AM用）
 // ────────────────────────────────────────────
-function AMExpandRow({ user: u, onMemoSaved }: { user: UserRecord; onMemoSaved: (id: string, memo: string) => void }) {
+function AMExpandRow({ user: u, onMemoSaved, onStatusChanged }: { user: UserRecord; onMemoSaved: (id: string, memo: string) => void; onStatusChanged?: (id: string, field: "churned_at" | "paused_at", value: string | null) => void }) {
   const [open, setOpen] = useState(false);
   const [tab, setTab] = useState<"status" | "accounts" | "eval" | "profile">("status");
 
@@ -750,6 +764,15 @@ function AMExpandRow({ user: u, onMemoSaved }: { user: UserRecord; onMemoSaved: 
                   onSaved={(v) => onMemoSaved(u.id, v)}
                 />
               </div>
+              {/* ステータス変更 */}
+              {onStatusChanged && (
+                <StatusChanger
+                  userId={u.id}
+                  churnedAt={u.churned_at}
+                  pausedAt={u.paused_at}
+                  onChanged={(field, value) => onStatusChanged(u.id, field, value)}
+                />
+              )}
             </div>
           )}
 
@@ -961,6 +984,7 @@ export default function HRPage() {
                       key={u.id}
                       user={u}
                       onMemoSaved={(id, memo) => setUsers((prev) => prev.map((p) => p.id === id ? { ...p, salesMemo: memo } : p))}
+                      onStatusChanged={(id, field, value) => setUsers((prev) => prev.map((p) => p.id === id ? { ...p, [field]: value } : p))}
                     />
                   ))}
                 </div>

@@ -10,6 +10,7 @@ import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { ChevronDown, ChevronUp, UserX, Clock, AlertCircle } from "lucide-react";
 import PageLayout from "@/components/layout/PageLayout";
+import AccountsView from "@/components/accounts/AccountsView";
 import type { Role } from "@/types/user";
 
 // ─── 型 ────────────────────────────────────────────────────────────
@@ -27,6 +28,12 @@ interface ChurnedUser {
   stepLabel: string;
   daysUntilChurn: number | null;
   churnedReason: string;
+  age?: number | null;
+  gender?: string | null;
+  hobbies?: string | null;
+  self_introduction?: string | null;
+  featured_image_1_url?: string | null;
+  featured_image_2_url?: string | null;
 }
 
 interface PhaseCount { phase: string; count: number; }
@@ -77,14 +84,34 @@ function ReasonEditor({ userId, initial, onSaved }: { userId: string; initial: s
   );
 }
 
-// ─── 離脱メンバー展開行 ────────────────────────────────────────────
+// ─── 離脱メンバー展開行（タブ付き） ──────────────────────────────
+const CHURNED_TABS = [
+  { key: "profile"  as const, label: "プロフィール" },
+  { key: "accounts" as const, label: "アカウント" },
+];
+type ChurnedTabKey = typeof CHURNED_TABS[number]["key"];
+
 function ChurnedMemberRow({ user: u, onReasonSaved }: { user: ChurnedUser; onReasonSaved: (id: string, reason: string) => void }) {
   const [open, setOpen] = useState(false);
+  const [tab, setTab] = useState<ChurnedTabKey>("profile");
   const avatar = u.icon_image_url ?? u.line_picture_url;
   const displayName = u.nickname ?? u.name ?? u.id;
 
   const churnDate = new Date(u.churned_at).toLocaleDateString("ja-JP");
   const joinDate  = u.registered_at ? new Date(u.registered_at).toLocaleDateString("ja-JP") : "—";
+
+  const infoRows = [
+    { label: "チーム",    value: u.team ?? "—" },
+    { label: "採用日",    value: joinDate },
+    { label: "離脱日",    value: churnDate },
+    { label: "在籍期間",  value: u.daysUntilChurn != null ? `${u.daysUntilChurn}日` : "—" },
+    { label: "離脱時",    value: `${u.phaseLabel}（${u.stepLabel}）` },
+    { label: "年齢",      value: u.age ? `${u.age}歳` : "—" },
+    { label: "性別",      value: u.gender ?? "—" },
+    { label: "趣味",      value: u.hobbies?.trim() || "—" },
+  ];
+
+  const hasBothPhotos = !!(u.featured_image_1_url && u.featured_image_2_url);
 
   return (
     <div className="border-b last:border-b-0">
@@ -115,28 +142,66 @@ function ChurnedMemberRow({ user: u, onReasonSaved }: { user: ChurnedUser; onRea
       </button>
 
       {open && (
-        <div className="bg-red-50/30 px-4 pb-4 pt-3 border-t border-red-50 space-y-3">
-          {/* 基本情報 */}
-          <div className="bg-white rounded-xl border border-gray-100 px-4 py-3 space-y-0">
-            {[
-              { label: "チーム",    value: u.team ?? "—" },
-              { label: "採用日",    value: joinDate },
-              { label: "離脱日",    value: churnDate },
-              { label: "在籍期間",  value: u.daysUntilChurn != null ? `${u.daysUntilChurn}日` : "—" },
-              { label: "離脱時",    value: `${u.phaseLabel}（${u.stepLabel}）` },
-            ].map(({ label, value }, i, arr) => (
-              <div key={label} className={`flex items-center gap-3 py-2 text-sm ${i < arr.length - 1 ? "border-b border-gray-50" : ""}`}>
-                <span className="text-gray-400 text-xs w-16 shrink-0">{label}</span>
-                <span className="text-gray-800 font-medium">{value}</span>
-              </div>
+        <div className="bg-red-50/20 px-4 pb-4 pt-3 border-t border-red-50 space-y-3">
+          {/* タブ */}
+          <div className="flex gap-1 bg-gray-200 rounded-lg p-0.5">
+            {CHURNED_TABS.map((t) => (
+              <button
+                key={t.key}
+                onClick={() => setTab(t.key)}
+                className={`flex-1 text-xs py-1.5 rounded-md transition-colors font-medium ${
+                  tab === t.key ? "bg-white shadow-sm text-red-600" : "text-gray-500"
+                }`}
+              >
+                {t.label}
+              </button>
             ))}
           </div>
 
-          {/* 離脱原因 */}
-          <div>
-            <p className="text-xs font-semibold text-gray-700 mb-1.5">離脱原因</p>
-            <ReasonEditor userId={u.id} initial={u.churnedReason} onSaved={(v) => onReasonSaved(u.id, v)} />
-          </div>
+          {tab === "profile" && (
+            <div className="space-y-3">
+              {/* 基本情報 */}
+              <div className="bg-white rounded-xl border border-gray-100 px-4 py-3">
+                {infoRows.map(({ label, value }, i) => (
+                  <div key={label} className={`flex items-center gap-3 py-2 text-sm ${i < infoRows.length - 1 ? "border-b border-gray-50" : ""}`}>
+                    <span className="text-gray-400 text-xs w-16 shrink-0">{label}</span>
+                    <span className="text-gray-800 font-medium">{value}</span>
+                  </div>
+                ))}
+                {u.self_introduction?.trim() && (
+                  <div className="py-2.5 border-t border-gray-50">
+                    <p className="text-gray-400 text-xs mb-1.5">自己紹介</p>
+                    <p className="text-gray-700 text-sm whitespace-pre-line leading-relaxed">{u.self_introduction}</p>
+                  </div>
+                )}
+              </div>
+
+              {/* 離脱原因 */}
+              <div>
+                <p className="text-xs font-semibold text-gray-700 mb-1.5">離脱原因</p>
+                <ReasonEditor userId={u.id} initial={u.churnedReason} onSaved={(v) => onReasonSaved(u.id, v)} />
+              </div>
+
+              {/* イチオシ写真 */}
+              {(u.featured_image_1_url || u.featured_image_2_url) && (
+                <div>
+                  <p className="text-xs font-semibold text-gray-500 mb-2">イチオシ写真</p>
+                  <div className={`grid gap-2 ${hasBothPhotos ? "grid-cols-2" : "grid-cols-1"}`}>
+                    {u.featured_image_1_url && (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={u.featured_image_1_url} alt="写真1" className="w-full rounded-xl border border-gray-100 shadow-sm grayscale opacity-70" style={{ display: "block" }} />
+                    )}
+                    {u.featured_image_2_url && (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={u.featured_image_2_url} alt="写真2" className="w-full rounded-xl border border-gray-100 shadow-sm grayscale opacity-70" style={{ display: "block" }} />
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {tab === "accounts" && <AccountsView userId={u.id} />}
         </div>
       )}
     </div>
@@ -260,7 +325,7 @@ export default function ChurnedPage() {
             <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
               <div className="px-4 py-3 border-b border-gray-50">
                 <p className="text-sm font-bold text-gray-700">離脱メンバー一覧</p>
-                <p className="text-xs text-gray-400 mt-0.5">名前をタップすると詳細・離脱原因を編集できます</p>
+                <p className="text-xs text-gray-400 mt-0.5">名前をタップすると詳細を確認できます</p>
               </div>
               {users.length === 0 ? (
                 <div className="flex flex-col items-center gap-2 py-12 text-gray-300">

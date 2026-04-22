@@ -30,7 +30,7 @@ export async function GET() {
   // 離脱ユーザー取得（churned_at が設定されているアポインター）
   let query = supabaseAdmin
     .from("users")
-    .select("id, nickname, name, role, team, line_picture_url, icon_image_url, churned_at, created_at")
+    .select("id, nickname, name, role, team, line_picture_url, icon_image_url, churned_at, created_at, age, gender, hobbies, self_introduction, featured_image_1_url, featured_image_2_url")
     .eq("role", "Appointer")
     .not("churned_at", "is", null)
     .order("churned_at", { ascending: false });
@@ -87,6 +87,12 @@ export async function GET() {
       stepLabel:      stepCount >= ROADMAP_STEPS.length ? "デビュー後" : `STEP${stepCount}完了`,
       daysUntilChurn,
       churnedReason:  rm?.churned_reason ?? "",
+      age:            (u as Record<string, unknown>).age as number | null ?? null,
+      gender:         (u as Record<string, unknown>).gender as string | null ?? null,
+      hobbies:        (u as Record<string, unknown>).hobbies as string | null ?? null,
+      self_introduction: (u as Record<string, unknown>).self_introduction as string | null ?? null,
+      featured_image_1_url: (u as Record<string, unknown>).featured_image_1_url as string | null ?? null,
+      featured_image_2_url: (u as Record<string, unknown>).featured_image_2_url as string | null ?? null,
     };
   });
 

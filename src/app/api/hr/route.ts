@@ -153,11 +153,17 @@ export async function GET() {
 
   // Appointerのみでサマリー計算
   const appointers = enriched.filter((u) => u.role === "Appointer");
-  const preDebutUsers = appointers.filter((u) => !u.debuted);
+  const preDebutUsers = appointers.filter((u) => !u.debuted && !u.churned_at);
+  // 当月離脱 = churned_at が今月内にセットされているユーザー
+  const thisMonthChurned = appointers.filter((u) => {
+    if (!u.churned_at) return false;
+    const d = new Date(u.churned_at);
+    return d.getFullYear() === thisYear && d.getMonth() + 1 === thisMonth;
+  });
   const summary = {
-    total:   appointers.length,
-    debuted: appointers.filter((u) => u.debuted && !u.isChurned).length,
-    churned: appointers.filter((u) => u.isChurned).length,
+    total:   appointers.filter((u) => !u.churned_at).length,
+    debuted: appointers.filter((u) => u.debuted && !u.churned_at).length,
+    churned: thisMonthChurned.length,
     phaseCount: [
       { phase: "phase1", label: "Phase 1: 基礎構築",       count: preDebutUsers.filter((u) => u.completedStepCount < 4).length },
       { phase: "phase2", label: "Phase 2: アカウント成長",  count: preDebutUsers.filter((u) => u.completedStepCount >= 4 && u.completedStepCount < 7).length },
