@@ -81,7 +81,7 @@ export default function SetupPage() {
 
   if (status === "loading") {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+      <div className="min-h-screen flex items-center justify-center p-4" style={{ background: "linear-gradient(160deg, #fff9ec 0%, #fef5de 100%)" }}>
         <p>読み込み中...</p>
       </div>
     );
@@ -128,7 +128,7 @@ export default function SetupPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+    <div className="min-h-screen flex items-center justify-center p-4" style={{ background: "linear-gradient(160deg, #fff9ec 0%, #fef5de 100%)" }}>
       <Card className="w-full max-w-xl p-6">
         <div className="space-y-2">
           <h1 className="text-xl font-bold">初期設定</h1>

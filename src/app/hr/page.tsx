@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import {
   Users, UserCheck, UserX, TrendingUp,
   ChevronDown, ChevronUp, Calendar,
+  CheckCircle2, Circle, Undo2,
 } from "lucide-react";
 import AccountsView from "@/components/accounts/AccountsView";
 import PageLayout from "@/components/layout/PageLayout";
@@ -461,6 +462,19 @@ function AppointerExpandRow({
   const [savingHireDate, setSavingHireDate] = useState(false);
   const [stepCount, setStepCount] = useState(u.completedStepCount);
   const [savingStep, setSavingStep] = useState(false);
+  const [deadlines, setDeadlines] = useState<Record<string, string>>({});
+  const [deadlinesLoaded, setDeadlinesLoaded] = useState(false);
+
+  useEffect(() => {
+    if (!open || deadlinesLoaded) return;
+    fetch(`/api/roadmap/${u.id}`)
+      .then((r) => r.json())
+      .then(({ roadmap }) => {
+        setDeadlines(roadmap?.deadlines_by_step_id ?? {});
+        setDeadlinesLoaded(true);
+      })
+      .catch(() => setDeadlinesLoaded(true));
+  }, [open, u.id, deadlinesLoaded]);
 
   async function saveHireDate() {
     if (!hireDate) return;
@@ -575,51 +589,99 @@ function AppointerExpandRow({
 
               {/* デビューまでの進捗 */}
               <div>
-                <div className="flex items-center justify-between mb-1.5">
-                  <p className="text-xs font-semibold text-gray-700">デビューまでの進捗</p>
-                  <span className="text-sm font-bold text-indigo-600">{Math.round((stepCount / ROADMAP_STEPS.length) * 100)}%</span>
-                </div>
+                <p className="text-xs text-gray-500 mb-1">
+                  {stepCount < ROADMAP_STEPS.length
+                    ? `ステップ ${stepCount + 1} / ${ROADMAP_STEPS.length} — ${ROADMAP_STEPS[stepCount]?.label}`
+                    : "デビュー完了"}
+                </p>
                 <div className="w-full bg-gray-200 rounded-full h-2 mb-1">
-                  <div
-                    className="bg-indigo-500 h-2 rounded-full transition-all"
-                    style={{ width: `${Math.round((stepCount / ROADMAP_STEPS.length) * 100)}%` }}
-                  />
+                  <div className="bg-indigo-500 h-2 rounded-full transition-all"
+                    style={{ width: `${Math.round((stepCount / ROADMAP_STEPS.length) * 100)}%` }} />
                 </div>
-                <p className="text-xs text-gray-400">{stepCount} / {ROADMAP_STEPS.length} ステップ完了{savingStep ? "　保存中..." : ""}</p>
+                <p className="text-xs text-gray-400 text-right">{stepCount} / {ROADMAP_STEPS.length} 完了{savingStep ? "　保存中..." : ""}</p>
               </div>
 
-              {/* フェーズ別ステップ（完了ボタン形式） */}
-              <div className="space-y-2">
-                {savingStep && <p className="text-xs text-gray-400 text-center">保存中...</p>}
-                {ROADMAP_PHASES.map((phase) => (
-                  <div key={phase.id} className="bg-white rounded-lg border p-2.5">
-                    <p className="text-xs font-semibold text-gray-600 mb-2">{phase.label}</p>
-                    <div className="space-y-1.5">
-                      {phase.steps.map((step) => {
-                        const idx  = ROADMAP_STEPS.findIndex((r) => r.id === step.id);
-                        const done = idx < stepCount;
-                        return (
-                          <div key={step.id} className="flex items-center gap-2">
-                            <span className={`flex-1 text-xs ${done ? "text-gray-400 line-through" : "text-gray-700"}`}>
-                              {idx + 1}. {step.label}
-                            </span>
-                            <button
-                              onClick={() => saveStepCount(done ? idx : idx + 1)}
-                              disabled={savingStep}
-                              className={`shrink-0 px-2.5 py-1 rounded-lg text-xs font-semibold border transition-colors disabled:opacity-40 ${
-                                done
-                                  ? "bg-indigo-600 text-white border-indigo-600 hover:bg-indigo-700"
-                                  : "bg-white text-gray-400 border-gray-200 hover:border-indigo-400 hover:text-indigo-600"
-                              }`}
-                            >
-                              {done ? "完了済" : "完了"}
-                            </button>
-                          </div>
-                        );
-                      })}
+              {/* フェーズ別ステップ */}
+              <div className="space-y-4">
+                {ROADMAP_PHASES.map((phase) => {
+                  const phaseStepIndices = phase.steps.map((s) => ROADMAP_STEPS.findIndex((r) => r.id === s.id));
+                  const phaseDone   = phaseStepIndices.every((i) => i < stepCount);
+                  const phaseActive = !phaseDone && phaseStepIndices.some((i) => i <= stepCount);
+                  return (
+                    <div key={phase.id}>
+                      <div className={`flex items-center gap-2 px-2 py-1 rounded-lg mb-1 text-xs font-bold ${
+                        phaseDone ? "bg-green-50 text-green-700"
+                        : phaseActive ? "bg-indigo-50 text-indigo-700"
+                        : "bg-gray-50 text-gray-400"
+                      }`}>
+                        <span>{phase.label}</span>
+                        {phaseDone && <span className="text-green-600">✓ 完了</span>}
+                      </div>
+                      <ol className="space-y-1">
+                        {phase.steps.map((stepDef) => {
+                          const stepIdx    = ROADMAP_STEPS.findIndex((r) => r.id === stepDef.id);
+                          const isDone     = stepIdx < stepCount;
+                          const isActive   = stepIdx === stepCount;
+                          const isLastDone = stepIdx === stepCount - 1;
+                          const deadlineVal = deadlines[stepDef.id]
+                            ? new Date(deadlines[stepDef.id]).toISOString().slice(0, 10)
+                            : "";
+                          return (
+                            <li key={stepDef.id} className={`flex items-center gap-2 px-2 py-1.5 rounded-lg ${
+                              isDone ? "bg-green-50" : isActive ? "bg-indigo-50" : "bg-white"
+                            }`}>
+                              <span className="shrink-0">
+                                {isDone
+                                  ? <CheckCircle2 className="w-4 h-4 text-green-500" />
+                                  : isActive
+                                  ? <Circle className="w-4 h-4 text-indigo-500 fill-indigo-100" />
+                                  : <Circle className="w-4 h-4 text-gray-300" />}
+                              </span>
+                              <span className={`flex-1 text-xs ${
+                                isDone ? "text-gray-500 line-through" : isActive ? "text-indigo-700 font-semibold" : "text-gray-400"
+                              }`}>
+                                {stepIdx + 1}. {stepDef.label}
+                              </span>
+                              <input
+                                type="date"
+                                className={`h-7 rounded border px-1.5 text-xs w-32 shrink-0 ${isDone ? "bg-gray-50 text-gray-400" : "bg-white"}`}
+                                value={deadlineVal}
+                                onChange={(e) => setDeadlines((prev) => ({ ...prev, [stepDef.id]: e.target.value }))}
+                                onBlur={async (e) => {
+                                  const val = e.target.value;
+                                  const iso = val ? new Date(val + "T00:00:00").toISOString() : null;
+                                  const next = { ...deadlines };
+                                  if (iso) next[stepDef.id] = iso; else delete next[stepDef.id];
+                                  await fetch(`/api/roadmap/${u.id}`, {
+                                    method: "PATCH",
+                                    headers: { "Content-Type": "application/json" },
+                                    body: JSON.stringify({ deadlines_by_step_id: next }),
+                                  });
+                                  setDeadlines(next);
+                                }}
+                                disabled={isDone && !isLastDone}
+                              />
+                              <div className="shrink-0 w-16 flex justify-end">
+                                {isActive && (
+                                  <button onClick={() => saveStepCount(stepCount + 1)} disabled={savingStep}
+                                    className="px-2 py-1 rounded-lg text-xs font-semibold bg-indigo-600 text-white hover:bg-indigo-700 active:scale-95 transition-transform disabled:opacity-40">
+                                    完了
+                                  </button>
+                                )}
+                                {isLastDone && (
+                                  <button onClick={() => saveStepCount(stepCount - 1)} disabled={savingStep}
+                                    className="flex items-center gap-0.5 px-2 py-1 rounded-lg text-xs text-gray-500 hover:bg-gray-100 hover:text-gray-700 disabled:opacity-40">
+                                    <Undo2 className="w-3 h-3" />戻す
+                                  </button>
+                                )}
+                              </div>
+                            </li>
+                          );
+                        })}
+                      </ol>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
 
               {/* 離脱・休止ボタン */}
